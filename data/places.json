@@ -1,0 +1,14 @@
+{
+  "note": "Ready-to-meet places. Public, low-key, central. No hours listed on purpose — the app says 'check hours'. Edit freely.",
+  "places": [
+    { "name": "Dobra Tea", "neighborhood": "Downtown", "tab": null, "why": "Quiet, Church St, easy 40 minutes" },
+    { "name": "Waterfront Park bench walk", "neighborhood": "Downtown", "tab": "trails", "why": "A walk is easier than a table" },
+    { "name": "Oakledge Park", "neighborhood": "South End", "tab": "dogs", "why": "Dogs welcome, lake views, no pressure" },
+    { "name": "Radio Bean", "neighborhood": "Old North End", "tab": "music", "why": "Something's usually playing" },
+    { "name": "Foam Brewers", "neighborhood": "Downtown", "tab": "games", "why": "Tables for cards, lake out the window" },
+    { "name": "Speeder & Earl's", "neighborhood": "Downtown", "tab": null, "why": "Coffee, daylight, public" },
+    { "name": "City Hall Park", "neighborhood": "Downtown", "tab": null, "why": "Meet by the fountain, decide from there" },
+    { "name": "Burlington Bike Path (North Beach end)", "neighborhood": "New North End", "tab": "trails", "why": "Side by side beats face to face" }
+  ],
+  "standing": { "id": "standing:saturday-coffee", "title": "Saturday coffee (the usual crowd)", "place": "Downtown — spot posted on Meetup", "neighborhood": "Downtown", "tab": null, "host": "Stephen", "url": "https://www.meetup.com/burlington-social-activites-group/", "source": "standing", "why": "Low-key, big group, easy exit" }
+}

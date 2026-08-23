@@ -1,0 +1,1116 @@
+{
+"source": "Stay Awhile deck (btownbrief/stay-awhile, QUESTIONS.md is the voice doctrine)",
+"count": 222,
+"questions": [
+{
+"id": "q001",
+"q": "Church Street or the waterfront?",
+"d": "light"
+},
+{
+"id": "q002",
+"q": "What's the correct creemee order?",
+"d": "light"
+},
+{
+"id": "q003",
+"q": "You've got a visitor and exactly one stop. Where do you take them?",
+"d": "light"
+},
+{
+"id": "q007",
+"q": "Have you ever gone in the lake in April? Would you?",
+"d": "light"
+},
+{
+"id": "q008",
+"q": "What's the most Vermont thing you've ever done?",
+"d": "light"
+},
+{
+"id": "q010",
+"q": "Where's the best place to eat in this town that isn't on Church Street?",
+"d": "light"
+},
+{
+"id": "q011",
+"q": "Where's the best breakfast in Chittenden County?",
+"d": "light"
+},
+{
+"id": "q012",
+"q": "Do you actually go to the farmers market, or do you just intend to?",
+"d": "light"
+},
+{
+"id": "q013",
+"q": "Have you seen Champ? Do you want to?",
+"d": "light"
+},
+{
+"id": "q014",
+"q": "Where's the worst pothole in the city right now?",
+"d": "light"
+},
+{
+"id": "q017",
+"q": "Mud season, black fly season, or February — which is worst?",
+"d": "light"
+},
+{
+"id": "q021",
+"q": "Will you still be here in ten years?",
+"d": "deep"
+},
+{
+"id": "q022",
+"q": "What brought you to Vermont — and was that the plan?",
+"d": "deep"
+},
+{
+"id": "q023",
+"q": "Who's the most Burlington person at this table?",
+"d": "light"
+},
+{
+"id": "q024",
+"q": "What's the best show you've ever seen at the Flynn or Higher Ground?",
+"d": "light"
+},
+{
+"id": "q025",
+"q": "Ski, ride, or stay inside?",
+"d": "light"
+},
+{
+"id": "q026",
+"q": "First snow of the year: joy or dread?",
+"d": "light"
+},
+{
+"id": "q028",
+"q": "Ben & Jerry's: still good, or are we over it?",
+"d": "light"
+},
+{
+"id": "q029",
+"q": "What's the best free thing to do in Burlington?",
+"d": "light"
+},
+{
+"id": "q031",
+"q": "What's the most beautiful drive in this state?",
+"d": "light"
+},
+{
+"id": "q032",
+"q": "Do you lock your door?",
+"d": "light"
+},
+{
+"id": "q033",
+"q": "Has a Vermont winter ever gotten the better of you?",
+"d": "deep"
+},
+{
+"id": "q034",
+"q": "Foliage season: worth the traffic?",
+"d": "light"
+},
+{
+"id": "q035",
+"q": "What do you tell out-of-staters about Vermont that they refuse to believe?",
+"d": "light"
+},
+{
+"id": "q041",
+"q": "Did you have a nickname? Does anyone still use it?",
+"d": "light"
+},
+{
+"id": "q045",
+"q": "What's the wildest thing you did as a kid and got away with?",
+"d": "light"
+},
+{
+"id": "q046",
+"q": "Did you skip school? What did you do instead?",
+"d": "light"
+},
+{
+"id": "q048",
+"q": "What crowd were you in at school — and what did you look like?",
+"d": "light"
+},
+{
+"id": "q049",
+"q": "Which subject came easy to you without trying?",
+"d": "light"
+},
+{
+"id": "q052",
+"q": "What food did you hate as a kid and love now?",
+"d": "light"
+},
+{
+"id": "q054",
+"q": "If your twelve-year-old self met you today, would they be impressed?",
+"d": "deep"
+},
+{
+"id": "q060",
+"q": "What's an inside joke your family will never explain to an outsider?",
+"d": "light"
+},
+{
+"id": "q070",
+"q": "What's the thing you'll definitely do differently from your parents?",
+"d": "deep"
+},
+{
+"id": "q071",
+"q": "Have you ever had your heart broken?",
+"d": "deep"
+},
+{
+"id": "q077",
+"q": "Who was your first serious crush?",
+"d": "light"
+},
+{
+"id": "q079",
+"q": "What would you never give up for another person?",
+"d": "deep"
+},
+{
+"id": "q080",
+"q": "Would you ever tattoo someone's name on yourself?",
+"d": "light"
+},
+{
+"id": "q082",
+"q": "Have you ever dated someone everyone around you disliked? Were they right?",
+"d": "deep"
+},
+{
+"id": "q086",
+"q": "What would your three-word dating profile be?",
+"d": "light"
+},
+{
+"id": "q087",
+"q": "What's the kindest thing a partner has ever done for you?",
+"d": "deep"
+},
+{
+"id": "q095",
+"q": "Who would you call at 3am, no questions asked?",
+"d": "deep"
+},
+{
+"id": "q096",
+"q": "Who would call you?",
+"d": "deep"
+},
+{
+"id": "q098",
+"q": "Is it harder to make friends now than it was at twenty? Why?",
+"d": "deep"
+},
+{
+"id": "q100",
+"q": "Which friendship do you regret letting go quiet?",
+"d": "deep"
+},
+{
+"id": "q101",
+"q": "Could you work from home forever, or would it start to get to you?",
+"d": "light"
+},
+{
+"id": "q102",
+"q": "What's the best hundred dollars you have ever spent?",
+"d": "light"
+},
+{
+"id": "q104",
+"q": "Have you ever oversold your job to a stranger at a party?",
+"d": "light"
+},
+{
+"id": "q105",
+"q": "Could you do sales? Would you be any good at it?",
+"d": "light"
+},
+{
+"id": "q108",
+"q": "If you never had to work again, what would you do with the rest of your life?",
+"d": "deep"
+},
+{
+"id": "q110",
+"q": "What do you spend money on that other people think is a waste?",
+"d": "light"
+},
+{
+"id": "q112",
+"q": "Would you let a robot do your job if you kept the salary?",
+"d": "light"
+},
+{
+"id": "q115",
+"q": "What's a meal you still think about?",
+"d": "light"
+},
+{
+"id": "q116",
+"q": "Are you a picky eater? What won't you touch?",
+"d": "light"
+},
+{
+"id": "q118",
+"q": "Best holiday candy: Valentine's, Easter, or Halloween?",
+"d": "light"
+},
+{
+"id": "q119",
+"q": "What do you cook when you want to show off?",
+"d": "light"
+},
+{
+"id": "q121",
+"q": "What do you eat when nobody's watching?",
+"d": "light"
+},
+{
+"id": "q123",
+"q": "What's the silliest diet you've ever tried?",
+"d": "light"
+},
+{
+"id": "q124",
+"q": "What's your order — and is it always the same order?",
+"d": "light"
+},
+{
+"id": "q125",
+"q": "Which city surprised you most?",
+"d": "light"
+},
+{
+"id": "q130",
+"q": "If you could live anywhere — where, and why aren't you there?",
+"d": "deep"
+},
+{
+"id": "q131",
+"q": "What's the worst trip you've ever taken?",
+"d": "light"
+},
+{
+"id": "q132",
+"q": "What's the most meaningful gift you have ever been given?",
+"d": "deep"
+},
+{
+"id": "q135",
+"q": "What's the longest you've ever waited in line? Was it worth it?",
+"d": "light"
+},
+{
+"id": "q139",
+"q": "When did you win something you had absolutely no business winning?",
+"d": "light"
+},
+{
+"id": "q140",
+"q": "What's the last thing you lost — or thought you'd lost?",
+"d": "light"
+},
+{
+"id": "q142",
+"q": "What would you give anything to experience for the first time again?",
+"d": "deep"
+},
+{
+"id": "q144",
+"q": "What's the longest you've gone without sleep, and what were you doing?",
+"d": "light"
+},
+{
+"id": "q145",
+"q": "What was your first email address?",
+"d": "light"
+},
+{
+"id": "q148",
+"q": "What's been the best day of your life so far?",
+"d": "deep"
+},
+{
+"id": "q149",
+"q": "Is the best part of your life behind you, happening now, or still coming?",
+"d": "deep"
+},
+{
+"id": "q150",
+"q": "What would you regret never doing?",
+"d": "deep"
+},
+{
+"id": "q151",
+"q": "What's the worst part of getting older?",
+"d": "deep"
+},
+{
+"id": "q152",
+"q": "Is there anything you would die for?",
+"d": "deep"
+},
+{
+"id": "q153",
+"q": "Can people actually change?",
+"d": "deep"
+},
+{
+"id": "q156",
+"q": "What was the hardest stretch of your life — and did it really make you better?",
+"d": "deep"
+},
+{
+"id": "q159",
+"q": "Outside your family, whose kindness do you still remember?",
+"d": "deep"
+},
+{
+"id": "q161",
+"q": "Would you want to know how and when you'll die?",
+"d": "deep"
+},
+{
+"id": "q163",
+"q": "Only one photograph of you survives. Which one do you pick?",
+"d": "deep"
+},
+{
+"id": "q164",
+"q": "When did you last think: it does not get better than this?",
+"d": "deep"
+},
+{
+"id": "q167",
+"q": "Is there enough adventure in your life right now?",
+"d": "deep"
+},
+{
+"id": "q168",
+"q": "Are you where you thought you'd be at this age?",
+"d": "deep"
+},
+{
+"id": "q169",
+"q": "What opportunity did you turn down that you still think about?",
+"d": "deep"
+},
+{
+"id": "q170",
+"q": "What do you want said about you at your funeral?",
+"d": "deep"
+},
+{
+"id": "q171",
+"q": "What have you forgiven that you never thought you could?",
+"d": "deep"
+},
+{
+"id": "q172",
+"q": "What's the best thing about your life right now that you never mention to anyone?",
+"d": "deep"
+},
+{
+"id": "q175",
+"q": "What's the best television show ever made?",
+"d": "light"
+},
+{
+"id": "q176",
+"q": "Most overrated film of all time.",
+"d": "light"
+},
+{
+"id": "q177",
+"q": "Which film deserves a sequel it never got?",
+"d": "light"
+},
+{
+"id": "q186",
+"q": "Are people basically kind, or basically selfish?",
+"d": "deep"
+},
+{
+"id": "q188",
+"q": "Is it ever okay to leave no tip at all?",
+"d": "light"
+},
+{
+"id": "q189",
+"q": "What was the most useless subject in school?",
+"d": "light"
+},
+{
+"id": "q206",
+"q": "What's the best secondhand thing you own?",
+"d": "light"
+},
+{
+"id": "q207",
+"q": "What's the worst sound in the world?",
+"d": "light"
+},
+{
+"id": "q210",
+"q": "What's something everyone loves that you quietly cannot stand?",
+"d": "light"
+},
+{
+"id": "q211",
+"q": "What's the pettiest hill you will die on?",
+"d": "light"
+},
+{
+"id": "q212",
+"q": "Which conspiracy theory is a little bit true?",
+"d": "light"
+},
+{
+"id": "q216",
+"q": "Have you ever quietly unfollowed or muted a friend? What did it?",
+"d": "light"
+},
+{
+"id": "q217",
+"q": "Which app do you open more than five times a day?",
+"d": "light"
+},
+{
+"id": "q218",
+"q": "What's your screen time this week? Everyone guesses before you look.",
+"d": "light"
+},
+{
+"id": "q223",
+"q": "Would you give up your smartphone for a year for fifty thousand dollars?",
+"d": "light"
+},
+{
+"id": "q224",
+"q": "Do you still know a single phone number by heart?",
+"d": "light"
+},
+{
+"id": "q225",
+"q": "Which group chat are you muted in but cannot leave?",
+"d": "light"
+},
+{
+"id": "q226",
+"q": "What trend are you pretending to understand?",
+"d": "light"
+},
+{
+"id": "q227",
+"q": "Would you rather everyone could read your texts, or your search history?",
+"d": "light"
+},
+{
+"id": "q229",
+"q": "Have you ever bought something at 1am that you regretted by breakfast?",
+"d": "light"
+},
+{
+"id": "q230",
+"q": "What brand do you buy out of pure habit rather than because it's good?",
+"d": "light"
+},
+{
+"id": "q231",
+"q": "When did you last print a photograph? Do you frame anything?",
+"d": "light"
+},
+{
+"id": "q232",
+"q": "Someone from the year 3000 watches one day of your life. What horrifies them?",
+"d": "light"
+},
+{
+"id": "q233",
+"q": "What's the last thing that made you laugh out loud when you were on your own?",
+"d": "light"
+},
+{
+"id": "q234",
+"q": "Would you rather lose every memory you have, or the ability to make new ones?",
+"d": "deep"
+},
+{
+"id": "q236",
+"q": "If you could watch a recording of your dreams, would you?",
+"d": "light"
+},
+{
+"id": "q237",
+"q": "One question, any person alive or dead, guaranteed honest answer. Who, and what?",
+"d": "deep"
+},
+{
+"id": "q238",
+"q": "You get to pass one law that everybody must follow. What is it?",
+"d": "light"
+},
+{
+"id": "q239",
+"q": "You can see the future. How far ahead do you look?",
+"d": "deep"
+},
+{
+"id": "q242",
+"q": "Would you enjoy dinner with your own clone, or would you hate them?",
+"d": "light"
+},
+{
+"id": "q244",
+"q": "You have to change your first name. What do you go by?",
+"d": "light"
+},
+{
+"id": "q245",
+"q": "What does your ordinary Tuesday as a billionaire look like?",
+"d": "light"
+},
+{
+"id": "q246",
+"q": "You land in 1800 with one modern object. What do you bring to show them?",
+"d": "light"
+},
+{
+"id": "q248",
+"q": "You come back as an animal. Which one?",
+"d": "light"
+},
+{
+"id": "q250",
+"q": "You get four extra hours in every day. What do you do with them?",
+"d": "light"
+},
+{
+"id": "q253",
+"q": "When were you caught red-handed?",
+"d": "light"
+},
+{
+"id": "q255",
+"q": "Have you ever fallen asleep somewhere you shouldn't have?",
+"d": "light"
+},
+{
+"id": "q257",
+"q": "Have you ever cut your own hair? Is there photographic evidence?",
+"d": "light"
+},
+{
+"id": "q258",
+"q": "Which photograph of you would you burn?",
+"d": "light"
+},
+{
+"id": "q259",
+"q": "What's a lie you tell all the time?",
+"d": "deep"
+},
+{
+"id": "q260",
+"q": "Tell us one thing almost nobody knows about you.",
+"d": "deep"
+},
+{
+"id": "q261",
+"q": "What's the most money you've ever spent on something completely unnecessary?",
+"d": "light"
+},
+{
+"id": "q263",
+"q": "Who do people say you look like? Do you see it?",
+"d": "light"
+},
+{
+"id": "q264",
+"q": "Is your handwriting any good, or is it a ransom note?",
+"d": "light"
+},
+{
+"id": "q266",
+"q": "What's your worst run-in with an animal?",
+"d": "light"
+},
+{
+"id": "q269",
+"q": "Which language do you wish you were fluent in?",
+"d": "light"
+},
+{
+"id": "q271",
+"q": "Are you actually good with kids?",
+"d": "light"
+},
+{
+"id": "q273",
+"q": "Do you always sleep on the same side of the bed? What happens if it's taken?",
+"d": "light"
+},
+{
+"id": "q274",
+"q": "What's your most irrational fear?",
+"d": "light"
+},
+{
+"id": "q275",
+"q": "Do you have a lucky object? What's the story?",
+"d": "light"
+},
+{
+"id": "q276",
+"q": "What's in your head in the last minute before you fall asleep?",
+"d": "deep"
+},
+{
+"id": "q277",
+"q": "When did you last tear up — happy or otherwise?",
+"d": "deep"
+},
+{
+"id": "q279",
+"q": "What compliment would you struggle to accept?",
+"d": "deep"
+},
+{
+"id": "q285",
+"q": "What are you doing right now that future-you will not believe?",
+"d": "deep"
+},
+{
+"id": "q287",
+"q": "How clean does your home really need to be?",
+"d": "light"
+},
+{
+"id": "q290",
+"q": "What are you avoiding right now?",
+"d": "deep"
+},
+{
+"id": "q292",
+"q": "What's the last thing you made with your hands?",
+"d": "light"
+},
+{
+"id": "q293",
+"q": "Do you know your neighbors' names? All of them?",
+"d": "light"
+},
+{
+"id": "q294",
+"q": "What smell do you love that everyone else finds revolting?",
+"d": "light"
+},
+{
+"id": "q296",
+"q": "What's the kindest thing someone here has ever done for you?",
+"d": "deep"
+},
+{
+"id": "q298",
+"q": "Who here would win on Jeopardy?",
+"d": "light"
+},
+{
+"id": "q299",
+"q": "Who's the best storyteller at this table?",
+"d": "light"
+},
+{
+"id": "q300",
+"q": "What word do you overuse?",
+"d": "light"
+},
+{
+"id": "q302",
+"q": "Who plays you in the film of your life?",
+"d": "light"
+},
+{
+"id": "q303",
+"q": "Are you cautious or a risk-taker — and would this table agree?",
+"d": "light"
+},
+{
+"id": "q304",
+"q": "Who at this table would last longest alone in the woods?",
+"d": "light"
+},
+{
+"id": "q305",
+"q": "Who here has changed the most since you met them?",
+"d": "deep"
+},
+{
+"id": "q308",
+"q": "What did you honestly think of me the first time we met?",
+"d": "deep"
+},
+{
+"id": "q309",
+"q": "Who's the last person you texted — and would you read it out loud?",
+"d": "light"
+},
+{
+"id": "q310",
+"q": "Something you've never told anyone at this table.",
+"d": "deep"
+},
+{
+"id": "q311",
+"q": "Which person here should you have called more this year?",
+"d": "deep"
+},
+{
+"id": "q312",
+"q": "What was your first car — and what happened to it?",
+"d": "light"
+},
+{
+"id": "q313",
+"q": "What's been in your fridge door for over a year?",
+"d": "light"
+},
+{
+"id": "q314",
+"q": "When did you last honk at someone — and did they deserve it?",
+"d": "light"
+},
+{
+"id": "q315",
+"q": "What's the farthest you've ever driven for a meal?",
+"d": "light"
+},
+{
+"id": "q316",
+"q": "What's in your car's center console right now?",
+"d": "light"
+},
+{
+"id": "q317",
+"q": "What's the last thing you borrowed and never gave back?",
+"d": "light"
+},
+{
+"id": "q318",
+"q": "Who has the best porch you've ever sat on?",
+"d": "light"
+},
+{
+"id": "q319",
+"q": "What's the best smell in a Vermont year?",
+"d": "light"
+},
+{
+"id": "q320",
+"q": "What's the most Vermont thing in your house?",
+"d": "light"
+},
+{
+"id": "q321",
+"q": "Running jump, slow wade, or not at all — how do you get in the lake?",
+"d": "light"
+},
+{
+"id": "q322",
+"q": "What's the last thing you fixed instead of replaced?",
+"d": "light"
+},
+{
+"id": "q323",
+"q": "Where's the most unexpected place you've run into a fellow Vermonter?",
+"d": "light"
+},
+{
+"id": "q324",
+"q": "What game are you unbeatable at?",
+"d": "light"
+},
+{
+"id": "q325",
+"q": "Which two people at this table should start a business together — and what business?",
+"d": "light"
+},
+{
+"id": "q326",
+"q": "Who in town knows your order without asking?",
+"d": "light"
+},
+{
+"id": "q327",
+"q": "What's the oldest thing you own that you still use?",
+"d": "light"
+},
+{
+"id": "q329",
+"q": "What do you do with the first real day of spring?",
+"d": "light"
+},
+{
+"id": "q340",
+"q": "Who changed your mind about something big?",
+"d": "deep"
+},
+{
+"id": "q341",
+"q": "What conversation do you keep meaning to have?",
+"d": "deep"
+},
+{
+"id": "q342",
+"q": "What's the bravest thing you've done that nobody saw?",
+"d": "deep"
+},
+{
+"id": "q343",
+"q": "If you got one more ordinary afternoon with someone who's gone, how would you spend it?",
+"d": "deep"
+},
+{
+"id": "q344",
+"q": "What part of your life right now will you miss most when it's gone?",
+"d": "deep"
+},
+{
+"id": "q345",
+"q": "When did you know it was time to leave — a job, a place, a person?",
+"d": "deep"
+},
+{
+"id": "q346",
+"q": "What's the closest you've come to a completely different life?",
+"d": "deep"
+},
+{
+"id": "q347",
+"q": "Who do you owe more than you can ever pay back?",
+"d": "deep"
+},
+{
+"id": "q348",
+"q": "Where were you the last time you felt completely at peace?",
+"d": "deep"
+},
+{
+"id": "q349",
+"q": "What would it take to make you leave Vermont?",
+"d": "deep"
+},
+{
+"id": "q350",
+"q": "What do you hope is exactly the same about this town in twenty years?",
+"d": "deep"
+},
+{
+"id": "q402",
+"q": "What's a dinner-table rule from your childhood you still follow?",
+"d": "light"
+},
+{
+"id": "q403",
+"q": "What did your family do every summer, no matter what?",
+"d": "light"
+},
+{
+"id": "q404",
+"q": "Who taught you to cook the one thing you actually make?",
+"d": "light"
+},
+{
+"id": "q406",
+"q": "Who's the best storyteller in your family? What's their go-to story?",
+"d": "light"
+},
+{
+"id": "q409",
+"q": "What's the funniest thing a kid in your life has said lately?",
+"d": "light"
+},
+{
+"id": "q410",
+"q": "Who in your family would survive longest in a Vermont winter with no power?",
+"d": "light"
+},
+{
+"id": "q411",
+"q": "What did you want to be at age eight?",
+"d": "light"
+},
+{
+"id": "q413",
+"q": "What's something about your work most people get wrong?",
+"d": "light"
+},
+{
+"id": "q414",
+"q": "What was your first paycheck spent on?",
+"d": "light"
+},
+{
+"id": "q416",
+"q": "What's a small work win you never got to brag about? Brag now.",
+"d": "light"
+},
+{
+"id": "q418",
+"q": "What's the weirdest task you've ever been paid for?",
+"d": "light"
+},
+{
+"id": "q419",
+"q": "What skill from an old job do you still use in real life?",
+"d": "light"
+},
+{
+"id": "q420",
+"q": "What job could you absolutely never do?",
+"d": "light"
+},
+{
+"id": "q421",
+"q": "What's your perfect Saturday in Burlington, hour by hour?",
+"d": "light"
+},
+{
+"id": "q423",
+"q": "What's the best live show you've ever seen?",
+"d": "light"
+},
+{
+"id": "q424",
+"q": "Swim, hike, or hammock — what's your lake day?",
+"d": "light"
+},
+{
+"id": "q425",
+"q": "What's something you're weirdly good at that never comes up?",
+"d": "light"
+},
+{
+"id": "q426",
+"q": "What do you do when you have the house to yourself?",
+"d": "light"
+},
+{
+"id": "q427",
+"q": "What's the last thing you did for the first time?",
+"d": "light"
+},
+{
+"id": "q428",
+"q": "Board games: ruthless, cooperative, or \"I'll just watch\"?",
+"d": "light"
+},
+{
+"id": "q429",
+"q": "What's a place within an hour of here everyone should go once?",
+"d": "light"
+},
+{
+"id": "q430",
+"q": "What did you play as a kid that you'd still play right now?",
+"d": "light"
+},
+{
+"id": "q433",
+"q": "What's a dream you gave up on that maybe you shouldn't have?",
+"d": "deep"
+},
+{
+"id": "q434",
+"q": "What would you build in Burlington if zoning and money didn't exist?",
+"d": "light"
+},
+{
+"id": "q435",
+"q": "What's the trip you keep almost booking?",
+"d": "light"
+},
+{
+"id": "q436",
+"q": "What do you hope people say about you when you're not in the room?",
+"d": "deep"
+},
+{
+"id": "q437",
+"q": "If you could master one skill overnight, what would it be?",
+"d": "light"
+},
+{
+"id": "q440",
+"q": "What are you quietly working up the courage to do?",
+"d": "deep"
+},
+{
+"id": "q351",
+"q": "What did you eat on a trip that felt very far from home?",
+"d": "light"
+},
+{
+"id": "q353",
+"q": "What's something you ate at a gas station that was much better than you expected?",
+"d": "light"
+},
+{
+"id": "q354",
+"q": "What's a small town you spent a night in, and what do you remember about it?",
+"d": "light"
+},
+{
+"id": "q355",
+"q": "What have you forgotten to pack that you never travel without now?",
+"d": "light"
+},
+{
+"id": "q361",
+"q": "What's something you ate just to be polite, and what was the occasion?",
+"d": "light"
+},
+{
+"id": "q362",
+"q": "What did you collect as a kid, and what became of it?",
+"d": "light"
+},
+{
+"id": "q365",
+"q": "Who at this table is most likely to end up famous in Burlington specifically?",
+"d": "light"
+},
+{
+"id": "q369",
+"q": "What place looked nothing like you expected when you arrived?",
+"d": "light"
+},
+{
+"id": "q371",
+"q": "When did you realize you were trying too hard to impress someone?",
+"d": "light"
+},
+{
+"id": "q377",
+"q": "What food did you learn to love because of one particular person?",
+"d": "light"
+}
+]
+}

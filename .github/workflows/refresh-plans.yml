@@ -1,0 +1,21 @@
+# Rebuilds data/plans.json from the Btown Brief events feed nightly (and on
+# demand) and commits it if it changed. Plans travel as a place and a time.
+name: refresh-plans
+on:
+  schedule: [{ cron: '15 9 * * *' }]   # 05:15 ET
+  workflow_dispatch:
+permissions: { contents: write }
+concurrency: { group: refresh-plans, cancel-in-progress: true }
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/build-plans.mjs
+      - name: Commit if changed
+        run: |
+          git config user.name "plans-bot"; git config user.email "bot@btownbrief.com"
+          git add data/plans.json
+          git diff --cached --quiet || (git commit -m "plans: nightly refresh" && git push)

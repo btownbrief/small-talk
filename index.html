@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Small Talk — meet people in Burlington</title>
+<meta name="description" content="A Burlington-only way to meet people — friends, or more. One line instead of an opener, a question card when you're stuck, and real plans in town.">
+<meta name="theme-color" content="#FBF8F2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0F1A29" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Small Talk">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+
+<header class="top" id="top">
+  <div class="brand">
+    <span class="wordmark">Small Talk</span>
+    <span class="place">Burlington</span>
+  </div>
+  <div class="top-right" id="top-right"></div>
+</header>
+
+<main id="main" aria-live="polite"></main>
+
+<nav class="tabbar" id="tabbar" aria-label="Sections" hidden>
+  <button data-tab="people" class="on" aria-current="page"><span class="ico">◎</span>People</button>
+  <button data-tab="plans"><span class="ico">▤</span>Plans</button>
+  <button data-tab="inbox"><span class="ico">✉</span>Inbox<b class="badge" id="inbox-badge" hidden></b></button>
+  <button data-tab="me"><span class="ico">○</span>Me</button>
+</nav>
+
+<div class="sheet-host" id="sheet-host" hidden>
+  <div class="scrim" data-close></div>
+  <section class="sheet" role="dialog" aria-modal="true" id="sheet"></section>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="assertive" hidden></div>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>

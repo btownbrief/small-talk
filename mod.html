@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Small Talk — back room</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  main { max-width: 760px; }
+  .q { background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; display: grid; gap: 6px; }
+  .q .acts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+  .stat { background: var(--paper-2); border-radius: var(--r-sm); padding: 10px 12px; }
+  .stat b { display: block; font-family: var(--serif); font-size: 28px; font-weight: 400; }
+  .stat span { font-size: 12.5px; color: var(--ink-3); }
+  .warn { color: var(--warn); font-weight: 600; }
+</style>
+</head>
+<body class="no-tabbar">
+<header class="top"><div class="brand"><a class="wordmark" href="./" style="text-decoration:none;color:inherit">Small Talk</a><span class="place">Back room</span></div><a class="btn sm" href="./">App</a></header>
+<main id="main"><div class="empty muted">Loading…</div></main>
+<div class="toast" id="toast" role="status" hidden></div>
+<script type="module">
+import { backend, explain } from './js/net.js';
+import { ratioStatus } from './js/core.js';
+const api = backend();
+const $ = (s, r = document) => r.querySelector(s);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const toast = (m) => { const t = $('#toast'); t.textContent = m; t.hidden = false; setTimeout(() => { t.hidden = true; }, 2600); };
+const when = (iso) => new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+async function load() {
+  const main = $('#main');
+  const s = await api.session();
+  if (!s) { main.innerHTML = '<div class="empty"><h3>Sign in first</h3><p class="muted">Use the app to sign in with the moderator account, then come back.</p><a class="btn" href="./">Open the app</a></div>'; return; }
+  let q;
+  try { q = await api.rpc('st_mod_queue'); } catch (e) { main.innerHTML = `<div class="empty"><p>${esc(explain(e))}</p></div>`; return; }
+  const r = q.ratio || {}; const open = r.datingOpen || {};
+  const rs = ratioStatus({ woman: open.woman || 0, man: open.man || 0, nonbinary: open.nonbinary || 0 });
+  main.innerHTML = `
+    <h1>Back room</h1>
+    <p class="small muted">Nothing here is deleted without you. "Restore" clears reports and un-hides; "Ban" hides for good. Held messages were flagged by the automatic check — release or delete.</p>
+    <h2 style="margin-top:22px">Dating lane balance</h2>
+    <div class="grid" style="margin-top:8px">
+      <div class="stat"><b>${r.members ?? 0}</b><span>members</span></div>
+      <div class="stat"><b>${open.woman || 0} · ${open.man || 0} · ${open.nonbinary || 0}</b><span>open to dating: women · men · non-binary</span></div>
+      <div class="stat"><b>${Object.values(r.datingHis7d || {}).reduce((a, b) => a + b, 0)}</b><span>dating hi's, 7 days (${Object.entries(r.datingHis7d || {}).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})</span></div>
+      <div class="stat"><b>${Object.values(r.datingReplied7d || {}).reduce((a, b) => a + b, 0)}</b><span>answered, 7 days (by recipient: ${Object.entries(r.datingReplied7d || {}).map(([k, v]) => `${k} ${v}`).join(', ') || '—'})</span></div>
+    </div>
+    <p class="small ${rs.ok ? 'muted' : 'warn'}" style="margin-top:8px">${rs.total < 20 ? 'Too few in the lane to judge yet. Look weekly.' : rs.ok ? `Balanced enough (${Math.round(rs.share * 100)}% ${rs.heavy}).` : `⚠ ${Math.round(rs.share * 100)}% ${rs.heavy} — past 70/30. Consider pausing new ${rs.heavy} dating-lane signups before the pool rots.`}</p>
+
+    <h2 style="margin-top:26px">Reports <span class="muted" style="font-size:18px">(${q.reports.length})</span></h2>
+    <div class="stack" id="reports">${q.reports.length ? '' : '<p class="muted">None open.</p>'}</div>
+    <h2 style="margin-top:26px">Held messages <span class="muted" style="font-size:18px">(${q.held.length})</span></h2>
+    <div class="stack" id="held">${q.held.length ? '' : '<p class="muted">None.</p>'}</div>
+    <h2 style="margin-top:26px">Suppressed profiles <span class="muted" style="font-size:18px">(${q.suppressed.length})</span></h2>
+    <div class="stack" id="supp">${q.suppressed.length ? '' : '<p class="muted">None.</p>'}</div>`;
+  for (const rep of q.reports) {
+    const el = document.createElement('div'); el.className = 'q';
+    el.innerHTML = `<div><b>${esc(rep.reason)}</b> about <b>${esc(rep.about?.firstName ?? '?')}</b> <span class="muted small">(${rep.about?.reports ?? 0} reports${rep.about?.suppressed ? ', suppressed' : ''})</span> from ${esc(rep.from?.firstName ?? '?')} · ${esc(when(rep.createdAt))}</div>
+      ${rep.detail ? `<div>“${esc(rep.detail)}”</div>` : ''}${rep.ref ? `<div class="small muted">${esc(rep.ref)}</div>` : ''}
+      <div class="acts"><button class="btn sm" data-a="dismiss">Dismiss report</button><button class="btn sm" data-a="restore">Restore profile</button><button class="btn sm" data-a="suppress">Keep hidden</button><button class="btn sm danger" data-a="ban">Ban</button></div>`;
+    el.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => act(b.dataset.a === 'dismiss' ? ['report', rep.id, 'dismissed'] : ['profile', rep.about.id, b.dataset.a])));
+    $('#reports').append(el);
+  }
+  for (const m of q.held) {
+    const el = document.createElement('div'); el.className = 'q';
+    el.innerHTML = `<div><b>${esc(m.from?.firstName ?? '?')}</b> · ${esc(when(m.createdAt))}</div><div>${esc(m.body)}</div><div class="acts"><button class="btn sm primary" data-a="release">Release</button><button class="btn sm danger" data-a="delete">Delete</button></div>`;
+    el.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => act(['message', m.id, b.dataset.a])));
+    $('#held').append(el);
+  }
+  for (const p of q.suppressed) {
+    const el = document.createElement('div'); el.className = 'q';
+    el.innerHTML = `<div><b>${esc(p.firstName)}</b> <span class="muted small">${p.reports} reports · joined ${esc(when(p.createdAt))}</span></div><div class="acts"><button class="btn sm" data-a="restore">Restore</button><button class="btn sm danger" data-a="ban">Ban</button></div>`;
+    el.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', () => act(['profile', p.id, b.dataset.a])));
+    $('#supp').append(el);
+  }
+}
+async function act([kind, id, action]) {
+  try { await api.rpc('st_mod_act', { p_kind: kind, p_id: id, p_action: action }); toast('Done.'); load(); } catch (e) { toast(explain(e)); }
+}
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+node_modules/
+scripts/screenshots/
+supabase/.temp/
+.DS_Store
+*.log
