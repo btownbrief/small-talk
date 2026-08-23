@@ -9,7 +9,7 @@ change it, change it here first and tell the other repo.
 ## What Up For It exposes (owner: Up For It, repo ~/btownbrief/up-for-it)
 
 One anon-callable RPC, `uf_plans_public()` (no args; agreed 2026-08-23 between
-the two sessions; the Up For It README is canonical). Returns a jsonb array of
+the two sessions; canonical: https://github.com/btownbrief/up-for-it/blob/main/README.md "The plans contract for sibling apps"). Returns a jsonb array of
 `{ id (uuid, stable), idea_id, title, place, detail, category, starts_at
 (ISO | null = needs a date), cap, threshold, status, host_name (FIRST NAME
 ONLY), in_count, wait_count, meetup_url ("" | https), created_at, tipped_at,
