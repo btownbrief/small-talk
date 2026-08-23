@@ -15,27 +15,41 @@ Project: Supabase `jnouvwxomrcffqwilqkq` (the fleet project). Repo
       (unmoderated sends / nothing delivered) until the keys below exist.
 - [x] Nightly `refresh-plans` workflow (05:15 ET) rebuilds `data/plans.json`.
 
+## Done by the follow-up session (2026-08-23, later)
+
+- [x] **Custom SMTP via Resend** set on the project's Auth config (host smtp.resend.com:465, user
+      `resend`, sender "Btown Brief" <hello@btownbrief.com>, 30 emails/hour). Magic links now reach
+      anyone. Test email from hello@btownbrief.com delivered.
+- [x] `RESEND_API_KEY` + `NOTIFY_FROM` secrets were already on the project (set by the Who's Playing /
+      Up For It sessions) — hi/message emails deliver.
+- [x] **Web push**: VAPID pair generated, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`
+      set as secrets, public key committed in `js/net.js`. Keys also saved in
+      `~/.config/btownbrief/secrets.env`.
+- [x] Google Cloud project `ops-dashboard-504300`: OAuth consent-screen app name renamed from
+      "Ops Dashboard" to **"Btown Brief"** (it's what members see on the Google sign-in screen;
+      publishing status was already In production / External, so no test-user list).
+
 ## ⚠ Stephen's switches (in order of how much they matter)
 
-1. **Google sign-in** (the main door). In Google Cloud Console → APIs & Services → Credentials →
-   *Create OAuth client ID* (Web application). Authorized redirect URI:
-   `https://jnouvwxomrcffqwilqkq.supabase.co/auth/v1/callback`. Then Supabase dashboard →
-   Authentication → Providers → Google: paste Client ID + Secret, enable. (~10 min.) Until then
-   "Continue with Google" fails with a clear message and "Email me a link" is the door.
-2. **Email that actually sends.** Supabase's built-in mailer is limited to ~2 emails/hour and only
-   to addresses on your Supabase team — fine for you testing, useless for members. Supabase →
-   Authentication → SMTP settings → enable custom SMTP with **Resend**: host `smtp.resend.com`,
-   port 465, user `resend`, password = your Resend API key, sender `hello@btownbrief.com` (Resend
-   must have btownbrief.com verified — same key Who's Playing is waiting on). This unlocks magic
-   links for everyone.
+1. **Google sign-in** (the main door) — the only click-through left. In Google Cloud Console,
+   project **ops-dashboard** (https://console.cloud.google.com/auth/clients?project=ops-dashboard-504300):
+   a. Google Auth Platform → **Branding** → Authorized domains → *Add domain* →
+      `jnouvwxomrcffqwilqkq.supabase.co` → Save (Supabase's guide requires this).
+   b. **Clients** → *Create client* → type **Web application**, name `small-talk`;
+      Authorized JavaScript origins: `https://play.btownbrief.com`;
+      Authorized redirect URIs: `https://jnouvwxomrcffqwilqkq.supabase.co/auth/v1/callback` → Create.
+   c. Copy the Client ID + Client secret. Either paste them into Supabase dashboard →
+      Authentication → Providers → Google (enable), or hand them to the agent session, which sets
+      them through the management API.
+   Until then "Continue with Google" shows a friendly message and "Email me a link" is the door
+   (and that now works for everyone).
+2. ~~Email that actually sends~~ — DONE (Resend SMTP on).
 3. **Moderation:** `supabase secrets set OPENAI_API_KEY=sk-... --project-ref jnouvwxomrcffqwilqkq`
-   (the free moderation endpoint; no model spend). Until set, messages land unmoderated; the report
-   queue still works.
-4. **Notification emails:** `supabase secrets set RESEND_API_KEY=re_... NOTIFY_FROM="Small Talk <hello@btownbrief.com>" --project-ref jnouvwxomrcffqwilqkq`.
-   Until set, everything waits in Inbox (the app says so).
-5. **Web push** (optional, after 4): `node scripts/vapid.mjs` → paste the public key into
-   `js/net.js` (`VAPID_PUBLIC_KEY`) and commit; set both keys + `VAPID_SUBJECT=mailto:hello@btownbrief.com`
-   as secrets. iPhone users must Add to Home Screen first (the app walks them through it).
+   (the free moderation endpoint; no model spend). Needs an OpenAI account + API key — none exists
+   on this machine. Until set, messages land unmoderated; the report queue still works.
+4. ~~Notification emails~~ — DONE (`RESEND_API_KEY` + `NOTIFY_FROM` secrets set).
+5. ~~Web push~~ — DONE (VAPID set, public key committed). iPhone users must Add to Home Screen first
+   (the app walks them through it).
 6. **Moderator account:** `st_mods` has `stephenvdavis@gmail.com`. Sign in with that Google account
    (or that email's magic link) and `mod.html` unlocks. Add a second moderator:
    `insert into st_mods values ('email')`.
@@ -45,7 +59,7 @@ Project: Supabase `jnouvwxomrcffqwilqkq` (the fleet project). Repo
 
 ## Cohort 1 checklist (from the spec)
 
-- Google OAuth on, Resend SMTP on, OPENAI key set.
+- Google OAuth on (step 1), OPENAI key set (step 3). Resend SMTP + push already on.
 - You create your own profile (this also tests photos + moderation end to end).
 - Invite the Saturday crowd with the link; one newsletter line for ~100 founding members.
 - Watch `mod.html` weekly: the dating-lane ratio box is the thing to look at.
