@@ -9,11 +9,9 @@
   on local Postgres, Playwright playtest 27 checks, live boot probe).
 
 ## Loose ends (Stephen) — SETUP.md has exact steps
-1. Google OAuth client → Supabase Providers (main sign-in door).
-2. Resend SMTP in Supabase Auth (magic links for everyone) + `RESEND_API_KEY` secret (hi/message emails).
-3. `OPENAI_API_KEY` secret (moderation on).
-4. Optional: VAPID keys for web push (`node scripts/vapid.mjs`).
-5. Decide when to list on the hub/arcade (currently unlisted on purpose).
+1. ~~Google OAuth~~ ~~Resend SMTP~~ ~~OPENAI key~~ ~~VAPID~~ — all ON as of 2026-08-23 pm.
+2. Make your own profile (the real end-to-end test), then decide when to list on the hub/arcade
+   (currently unlisted on purpose).
 
 ## Done later on 2026-08-23 (follow-up session)
 - Resend SMTP on (magic links for everyone), web push on (VAPID), pg_cron drain every 5 min.

@@ -38,22 +38,11 @@ Project: Supabase `jnouvwxomrcffqwilqkq` (the fleet project). Repo
 
 ## ⚠ Stephen's switches (in order of how much they matter)
 
-1. **Google sign-in** (the main door) — the only click-through left. In Google Cloud Console,
-   project **ops-dashboard** (https://console.cloud.google.com/auth/clients?project=ops-dashboard-504300):
-   a. Google Auth Platform → **Branding** → Authorized domains → *Add domain* →
-      `jnouvwxomrcffqwilqkq.supabase.co` → Save (Supabase's guide requires this).
-   b. **Clients** → *Create client* → type **Web application**, name `small-talk`;
-      Authorized JavaScript origins: `https://play.btownbrief.com`;
-      Authorized redirect URIs: `https://jnouvwxomrcffqwilqkq.supabase.co/auth/v1/callback` → Create.
-   c. Copy the Client ID + Client secret. Either paste them into Supabase dashboard →
-      Authentication → Providers → Google (enable), or hand them to the agent session, which sets
-      them through the management API.
-   Until then "Continue with Google" shows a friendly message and "Email me a link" is the door
-   (and that now works for everyone).
+1. ~~Google sign-in~~ — DONE 2026-08-23. OAuth client `small-talk` (Web application) in Cloud project
+   `ops-dashboard-504300`; Supabase Google provider enabled via the management API; consent screen
+   shows "Btown Brief". Client ID/secret also in `~/.config/btownbrief/secrets.env`.
 2. ~~Email that actually sends~~ — DONE (Resend SMTP on).
-3. **Moderation:** `supabase secrets set OPENAI_API_KEY=sk-... --project-ref jnouvwxomrcffqwilqkq`
-   (the free moderation endpoint; no model spend). Needs an OpenAI account + API key — none exists
-   on this machine. Until set, messages land unmoderated; the report queue still works.
+3. ~~Moderation~~ — DONE 2026-08-23 (`OPENAI_API_KEY` set; key "small-talk" in Stephen's OpenAI project).
 4. ~~Notification emails~~ — DONE (`RESEND_API_KEY` + `NOTIFY_FROM` secrets set).
 5. ~~Web push~~ — DONE (VAPID set, public key committed). iPhone users must Add to Home Screen first
    (the app walks them through it).
@@ -66,7 +55,7 @@ Project: Supabase `jnouvwxomrcffqwilqkq` (the fleet project). Repo
 
 ## Cohort 1 checklist (from the spec)
 
-- Google OAuth on (step 1), OPENAI key set (step 3). Resend SMTP + push already on.
+- All switches on (Google, SMTP, notify emails, push, OpenAI moderation) as of 2026-08-23.
 - You create your own profile (this also tests photos + moderation end to end).
 - Invite the Saturday crowd with the link; one newsletter line for ~100 founding members.
 - Watch `mod.html` weekly: the dating-lane ratio box is the thing to look at.
