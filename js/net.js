@@ -15,7 +15,7 @@ export const SUPABASE_URL = 'https://jnouvwxomrcffqwilqkq.supabase.co';
 export const SUPABASE_ANON_KEY = 'sb_publishable_RkMJQopffWlV6DSwCRkndQ_Xw6GJMf3';
 const MODERATE_FN = 'st-moderate';   // optional: OpenAI moderation before a message lands
 const NOTIFY_FN = 'st-notify';       // optional: drains st_notify_queue → email (+ push)
-export const VAPID_PUBLIC_KEY = '';  // set after `node scripts/vapid.mjs`; empty = push off, email only
+export const VAPID_PUBLIC_KEY = 'BGG0eQVqbWPNWCUtybQk8EW0ZrMDNNojooWHaP5iaSDwxQARZzJU_D5TRBp_sRFxl5dk9Ub6iZ0k8O0cuFebcpw';  // set after `node scripts/vapid.mjs`; empty = push off, email only
 const PHOTO_BUCKET = 'st-photos';
 
 export class NetError extends Error {
