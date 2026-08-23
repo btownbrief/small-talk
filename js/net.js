@@ -55,6 +55,12 @@ const network = {
   async session() { const c = await client(); return (await c.auth.getSession()).data.session; },
   async onAuth(cb) { const c = await client(); c.auth.onAuthStateChange((_e, s) => cb(s)); },
   async signInGoogle() {
+    // if the Google provider isn't switched on yet, say so instead of landing on a raw error page
+    try {
+      const r = await fetch(`${SUPABASE_URL}/auth/v1/settings`, { headers: { apikey: SUPABASE_ANON_KEY } });
+      const s = r.ok ? await r.json() : null;
+      if (s && s.external && s.external.google === false) throw new NetError('google_off');
+    } catch (e) { if (e instanceof NetError) throw e; /* settings unreachable: try anyway */ }
     const c = await client();
     const { error } = await c.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + APP_PATH } });
     if (error) throw new NetError('auth_failed', error.message);
@@ -216,6 +222,7 @@ export function explain(err) {
     not_signed_in: 'Sign in first.',
     no_profile: 'Finish your profile first.',
     auth_failed: "Sign-in didn't go through. Try again.",
+    google_off: 'Google sign-in is still being switched on. Use “Email me a link” for now.',
     slow_down: "That's plenty for now — try again later.",
     dating_cap: "You've said hi to five people this week in the dating lane. More next week.",
     already_said_hi: 'You already said hi.',
