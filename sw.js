@@ -1,14 +1,17 @@
 // SMALL TALK — service worker: push notifications + a tiny offline shell.
 // Network-first for everything (this is a live app); the shell caches only
 // so an offline open shows the page instead of a browser error.
-const SHELL = 'st-shell-v1';
+const SHELL = 'st-shell-v2';
 const SHELL_FILES = ['./', 'index.html', 'css/style.css', 'js/app.js', 'js/core.js', 'js/net.js', 'js/fake-backend.js', 'data/places.json', 'data/questions.json', 'manifest.webmanifest', 'icon.svg'];
 
 self.addEventListener('install', (e) => { e.waitUntil(caches.open(SHELL).then((c) => c.addAll(SHELL_FILES)).catch(() => {})); self.skipWaiting(); });
 self.addEventListener('activate', (e) => { e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== SHELL).map((k) => caches.delete(k))))); self.clients.claim(); });
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET' || !e.request.url.startsWith(self.location.origin)) return;
-  e.respondWith(fetch(e.request).then((r) => { if (r.ok && SHELL_FILES.some((f) => e.request.url.endsWith(f.replace('./', '')))) caches.open(SHELL).then((c) => c.put(e.request, r.clone())).catch(() => {}); return r; }).catch(() => caches.match(e.request).then((m) => m || caches.match('index.html'))));
+  // cache only the shell files (plus the app root itself) — never mod.html, data feeds, or query-string variants
+  const u = new URL(e.request.url); const isRoot = u.pathname.endsWith('/') && !u.search;
+  const isShell = isRoot || SHELL_FILES.some((f) => f !== './' && u.pathname.endsWith('/' + f) && !u.search);
+  e.respondWith(fetch(e.request).then((r) => { if (r.ok && isShell) caches.open(SHELL).then((c) => c.put(e.request, r.clone())).catch(() => {}); return r; }).catch(() => caches.match(e.request).then((m) => m || caches.match('index.html'))));
 });
 
 self.addEventListener('push', (e) => {

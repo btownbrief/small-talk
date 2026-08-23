@@ -73,7 +73,7 @@ body { overflow-x: hidden; }
 .btn.quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn.danger { color: var(--rose); border-color: var(--rose-soft); background: var(--rose-soft); }
 .btn.block { width: 100%; }
-.btn.sm { padding: 6px 12px; min-height: 32px; font-size: 13.5px; }
+.btn.sm { padding: 8px 12px; min-height: 40px; font-size: 13.5px; }
 .btn .g { width: 18px; height: 18px; }
 .row { display: flex; gap: 10px; align-items: center; }
 .row.between { justify-content: space-between; }

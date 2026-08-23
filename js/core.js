@@ -71,6 +71,7 @@ export const LIMITS = Object.freeze({
 
 export const RATE = Object.freeze({
   hisPerDay: 20,             // any lane; the dating-lane weekly cap is separate
+  hiPeoplePerWeek: 15,       // distinct recipients per rolling week, both lanes — the friends lane is not a spray lane
   messagesPerHour: 120,
   reportsPerDay: 10,
 });
@@ -243,6 +244,9 @@ export const UF_CATEGORY_TO_TAB = Object.freeze({ outdoors: 'trails', games: 'ga
  * 'tipping' (never shown here — a dating-app "I'm in" must not move a tip),
  * 'on' (+ starts_at) = our dated, 'done' = our happened, 'cancelled' = skip.
  */
+// links rendered as href must be real web links — anything else (javascript:, data:) becomes null
+export function httpsOnly(u) { const s = String(u ?? '').trim(); return /^https?:\/\/[^\s<>"']+$/i.test(s) ? s : null; }
+
 export function planFromUpForIt(row) {
   if (!row) return null;
   const status = row.status === 'on' && row.starts_at ? 'dated' : row.status === 'done' ? 'happened' : null;
@@ -259,7 +263,7 @@ export function planFromUpForIt(row) {
     going: Number(row.in_count ?? 0),
     showed: row.showed ?? null,
     host: row.host_name ? String(row.host_name).split(' ')[0].slice(0, 24) : null,
-    url: row.meetup_url || null,
+    url: httpsOnly(row.meetup_url),
     source: 'upforit',
     status,
   };

@@ -53,8 +53,9 @@ data/plans.json                     events-sourced plans (scripts/build-plans.mj
 data/places.json                    Ready-to-meet places + the standing Saturday plan
 data/questions.json                 222 cards from the Stay Awhile deck
 supabase/small-talk-SETUP.sql       st_* tables, RLS, RPCs, storage bucket + policies
-supabase/functions/st-moderate      OpenAI moderation on send + photos (optional)
-supabase/functions/st-notify        email (Resend) + web push drain (optional)
+supabase/functions/st-moderate      OpenAI moderation on send, hi notes, first replies + photos (optional)
+supabase/functions/st-notify        email (Resend) + web push drain, pending-photo moderation, orphan-photo sweep
+supabase/small-talk-CRON.sql        pg_cron: hits st-notify every 5 min (secret in Vault)
 scripts/test-core.mjs               node --test
 scripts/sql-check.sh + sql-smoke.sql  applies SQL to a scratch local Postgres + e2e smoke
 scripts/playtest.mjs                Playwright: full demo flow + no-backend fail-soft
@@ -76,10 +77,29 @@ node scripts/build-plans.mjs                 # refresh data/plans.json from the 
 ## Fail-soft, by design
 
 No SQL yet → `not_ready`, the landing still renders, plans still load from
-JSON. No `st-moderate` → plain `st_send` (unmoderated; the report queue still
-works). No `st-notify` / no Resend key → everything waits in Inbox. No VAPID
-key → no push, email only. `?demo=1` runs the whole thing against the fake
-backend with a seeded cast and saves nothing.
+JSON. No `st-moderate` → plain `st_send` / `st_hi` / `st_reply` (unmoderated;
+the report queue still works). No `st-notify` / no Resend key → everything
+waits in Inbox. No VAPID key → no push, email only. No `OPENAI_API_KEY` →
+pending photos are marked ok by the sweep. `?demo=1` runs the whole thing
+against the fake backend with a seeded cast and saves nothing.
+
+## After the 2026-08-23 code review (Opus, independent)
+
+Fixed the same day, all mirrored in SQL + `core.js` + `fake-backend.js` + tests:
+photo bucket readable only by members with a profile and never across a
+block/ban (`st_photo_visible`, was: any signed-in account); "Not now" is
+invisible to the sender (a passed hi reads as open, re-hi after expiry stays
+passed, no notification); bans bite from the banned side (browse/hi/send/
+reply/cards/meets) and survive "Delete everything" (`st_banned_emails` hash +
+`st_report_archive`); `st_cards` has no SELECT policy any more (both answers
+live in one row — realtime rides on `st_chats.last_at`); photos land
+`pending`, the client can't grade its own, `st-notify` moderates the backlog
+and sweeps folders whose account is gone; `st-notify` requires a member JWT or
+the cron secret and claims rows atomically (`st_notify_claim`); hi notes and
+first replies go through moderation; cards are deck ids only; 15 distinct
+recipients per week across both lanes; a profile needs (and keeps) a photo;
+reporters need a profile; plan links must be http(s); realtime falls back to a
+10s poll; the service worker caches only the shell.
 
 ## Honest threat model
 

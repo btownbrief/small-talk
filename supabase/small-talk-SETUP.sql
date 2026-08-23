@@ -165,6 +165,20 @@ create table if not exists public.st_reports (
 );
 create index if not exists st_reports_open on public.st_reports (resolved_at, created_at desc);
 
+-- a ban outlives "Delete everything": the banned email's hash is kept, and
+-- st_save_profile refuses it. Reports about/by a deleted account are copied
+-- here first so the record survives the cascade.
+create table if not exists public.st_banned_emails (
+  email_hash text primary key,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.st_report_archive (
+  id uuid primary key,
+  from_id uuid, about_id uuid, reason text, detail text, ref text,
+  created_at timestamptz, resolved_at timestamptz, resolution text,
+  archived_at timestamptz not null default now(), why text
+);
+
 create table if not exists public.st_push_subs (
   user_id uuid not null references auth.users(id) on delete cascade,
   endpoint text not null,
@@ -201,6 +215,8 @@ alter table public.st_blocks enable row level security;
 alter table public.st_reports enable row level security;
 alter table public.st_push_subs enable row level security;
 alter table public.st_notify_queue enable row level security;
+alter table public.st_banned_emails enable row level security;
+alter table public.st_report_archive enable row level security;
 
 -- Everything goes through RPCs. The one direct read is messages (realtime
 -- needs SELECT): a chat member sees a message if it isn't held or is theirs.
@@ -210,10 +226,13 @@ create policy st_messages_member_read on public.st_messages for select to authen
     exists (select 1 from public.st_chats c where c.id = chat_id and (c.a_id = auth.uid() or c.b_id = auth.uid()))
     and (not held or from_id = auth.uid())
   );
--- cards too, so a reveal arrives live
+-- st_cards has NO select policy: the row holds both answers, and st_chat() is
+-- the only projection (it hides theirs until revealed). Realtime for cards
+-- rides on st_chats.last_at instead, which every card action bumps.
 drop policy if exists st_cards_member_read on public.st_cards;
-create policy st_cards_member_read on public.st_cards for select to authenticated
-  using (exists (select 1 from public.st_chats c where c.id = chat_id and (c.a_id = auth.uid() or c.b_id = auth.uid())));
+drop policy if exists st_chats_member_read on public.st_chats;
+create policy st_chats_member_read on public.st_chats for select to authenticated
+  using (a_id = auth.uid() or b_id = auth.uid());
 
 -- ---------------------------------------------------------------- helpers
 
@@ -245,6 +264,27 @@ returns boolean language sql stable security definer set search_path = public as
     or exists (select 1 from public.st_profiles p where p.user_id = target and (p.banned or p.suppressed or not p.visible))
 $$;
 
+-- a banned caller gets nothing: no browse, no hi, no send (the ban must bite from both sides)
+create or replace function public.st_banned(u uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.st_profiles p where p.user_id = u and p.banned)
+$$;
+
+-- storage read policy for st-photos: your own folder always; anyone else's only
+-- if you are a real, un-banned member and neither of you has blocked/hidden the other
+create or replace function public.st_photo_visible(viewer uuid, folder text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+begin
+  if viewer is null or folder is null then return false; end if;
+  if folder = viewer::text then return true; end if;
+  if folder !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then return false; end if;
+  if not exists (select 1 from public.st_profiles me where me.user_id = viewer and not me.banned) then return false; end if;
+  return not public.st_excluded(viewer, folder::uuid);
+end $$;
+
+create or replace function public.st_email_hash(e text)
+returns text language sql immutable as $$ select encode(extensions.digest(lower(btrim(coalesce(e,''))), 'sha256'), 'hex') $$;
+
 -- mirrors core.canSee (visibility/blocks handled by st_excluded)
 create or replace function public.st_can_see(viewer uuid, target uuid, lane text)
 returns boolean language plpgsql stable security definer set search_path = public as $$
@@ -273,10 +313,11 @@ returns jsonb language sql stable security definer set search_path = public as $
     'neighborhood', p.neighborhood,
     'tabs', to_jsonb(p.tabs),
     'prompts', p.prompts,
-    'photos', coalesce((select jsonb_agg(ph.path order by ph.idx) from public.st_photos ph where ph.user_id = p.user_id and ph.status = 'ok'), '[]'::jsonb),
+    'photos', coalesce((select jsonb_agg(ph.path order by ph.idx) from public.st_photos ph where ph.user_id = p.user_id and ph.status in ('ok','pending')), '[]'::jsonb),
     'plans', coalesce((select jsonb_agg(pm.plan_id) from public.st_plan_members pm where pm.user_id = p.user_id and pm.show_name), '[]'::jsonb),
     'createdAt', p.created_at,
-    'hi', (select jsonb_build_object('id', h.id, 'status', h.status) from public.st_hellos h where h.from_id = viewer and h.to_id = p.user_id and h.expires_at > now() and h.status <> 'passed' limit 1)
+    -- a quietly declined ('passed') hi looks exactly like an open one to the sender
+    'hi', (select jsonb_build_object('id', h.id, 'status', case when h.status = 'passed' then 'open' else h.status end) from public.st_hellos h where h.from_id = viewer and h.to_id = p.user_id and h.expires_at > now() limit 1)
   )
 $$;
 
@@ -314,8 +355,12 @@ declare u uuid := public.st_uid();
   v_hood text := p ->> 'neighborhood';
   v_tabs text[]; v_prompts jsonb := '[]'::jsonb; el jsonb; a text; seen text[] := '{}';
 begin
+  if exists (select 1 from public.st_banned_emails b where b.email_hash = public.st_email_hash(auth.jwt() ->> 'email')) then raise exception 'banned'; end if;
+  if public.st_banned(u) then raise exception 'banned'; end if;
   if length(v_name) < 1 then raise exception 'bad_profile'; end if;
+  if v_hood is null or v_hood not in ('downtown','one','south-end','hill','new-north-end','winooski','south-burlington','essex','shelburne','colchester','elsewhere') then raise exception 'bad_profile'; end if;
   if v_year is null or public.st_age(v_year) < 18 or public.st_age(v_year) > 110 then raise exception 'too_young'; end if;
+  if not exists (select 1 from public.st_photos ph where ph.user_id = u and ph.status <> 'flagged') then raise exception 'no_photo'; end if;
   select coalesce(array_agg(distinct x), '{}') into v_tabs from jsonb_array_elements_text(coalesce(p -> 'tabs', '[]'::jsonb)) x where x in ('dogs','trails','music','games');
   if cardinality(v_tabs) > 4 then v_tabs := v_tabs[1:4]; end if;
   for el in select * from jsonb_array_elements(coalesce(p -> 'prompts', '[]'::jsonb)) loop
@@ -365,15 +410,21 @@ declare u uuid := public.st_uid();
 begin
   if p_idx not between 0 and 2 then raise exception 'bad_photo'; end if;
   if p_path !~ ('^' || u::text || '/[0-2]\.(jpg|jpeg|png|webp)$') then raise exception 'bad_photo'; end if;
-  if p_status not in ('ok','pending','flagged') then p_status := 'ok'; end if;
-  insert into public.st_photos (user_id, idx, path, status) values (u, p_idx, p_path, p_status)
-  on conflict (user_id, idx) do update set path = excluded.path, status = excluded.status, created_at = now();
+  -- p_status is ignored on purpose: the client doesn't get to grade its own photo.
+  -- A (re)upload is 'pending' until the moderation sweep marks it ok/flagged.
+  insert into public.st_photos (user_id, idx, path, status) values (u, p_idx, p_path, 'pending')
+  on conflict (user_id, idx) do update set path = excluded.path, status = 'pending', created_at = now();
 end $$;
 
 create or replace function public.st_remove_photo(p_idx int)
-returns void language sql security definer set search_path = public as $$
-  delete from public.st_photos where user_id = public.st_uid() and idx = p_idx;
-$$;
+returns void language plpgsql security definer set search_path = public as $$
+declare u uuid := public.st_uid();
+begin
+  -- a profile keeps at least one photo (mirrors core.validateProfile)
+  if exists (select 1 from public.st_profiles where user_id = u)
+     and (select count(*) from public.st_photos where user_id = u and idx <> p_idx and status <> 'flagged') = 0 then raise exception 'last_photo'; end if;
+  delete from public.st_photos where user_id = u and idx = p_idx;
+end $$;
 
 -- ---------------------------------------------------------------- browse
 
@@ -383,6 +434,7 @@ declare u uuid := public.st_uid(); me public.st_profiles;
 begin
   select * into me from public.st_profiles where user_id = u;
   if me.user_id is null then raise exception 'no_profile'; end if;
+  if me.banned then raise exception 'banned'; end if;
   if p_lane not in ('friends','dating') then raise exception 'bad_lane'; end if;
   return coalesce((
     select jsonb_agg(public.st_card(p, u) order by (exists (select 1 from public.st_plan_members pm where pm.user_id = p.user_id and pm.show_name)) desc, p.created_at desc)
@@ -421,19 +473,27 @@ declare u uuid := public.st_uid(); n text := public.st_clean(p_note, 140); h pub
 begin
   if p_lane not in ('friends','dating') then raise exception 'bad_lane'; end if;
   if length(n) < 1 then raise exception 'bad_hi'; end if;
+  if public.st_banned(u) then raise exception 'not_found'; end if;
   if p_to = u or not exists (select 1 from public.st_profiles where user_id = p_to) then raise exception 'not_found'; end if;
   if public.st_excluded(u, p_to) or not public.st_can_see(u, p_to, p_lane) then raise exception 'not_found'; end if;
   if (select count(*) from public.st_hellos where from_id = u and created_at > now() - interval '1 day') >= 20 then raise exception 'slow_down'; end if;
+  -- both lanes: at most 15 different people per rolling week (the friends lane must not be the spray lane)
+  if (select count(distinct to_id) from public.st_hellos where from_id = u and created_at > now() - interval '7 days' and to_id <> p_to) >= 15 then raise exception 'slow_down'; end if;
   if p_lane = 'dating' and (select count(*) from public.st_hellos where from_id = u and lane = 'dating' and created_at > now() - interval '7 days') >= 5 then
     raise exception 'dating_cap';
   end if;
+  -- Re-hi only once the last one has expired. If they quietly declined ('passed'),
+  -- the new hi is accepted but stays passed: the sender sees "You said hi" exactly
+  -- as if they were being ignored, and the recipient is never bothered again.
   insert into public.st_hellos (from_id, to_id, lane, note) values (u, p_to, p_lane, n)
-  on conflict (from_id, to_id) do update set lane = excluded.lane, note = excluded.note, status = 'open', created_at = now(), expires_at = now() + interval '7 days'
-    where public.st_hellos.expires_at < now() or public.st_hellos.status = 'passed'
+  on conflict (from_id, to_id) do update set lane = excluded.lane, note = excluded.note,
+    status = case when public.st_hellos.status = 'passed' then 'passed' else 'open' end,
+    created_at = now(), expires_at = now() + interval '7 days'
+    where public.st_hellos.expires_at < now()
   returning * into h;
   if h.id is null then raise exception 'already_said_hi'; end if;
-  insert into public.st_notify_queue (user_id, kind, ref) values (p_to, 'hi', h.id);
-  return jsonb_build_object('id', h.id, 'status', h.status);
+  if h.status = 'open' then insert into public.st_notify_queue (user_id, kind, ref) values (p_to, 'hi', h.id); end if;
+  return jsonb_build_object('id', h.id, 'status', 'open');
 end $$;
 
 create or replace function public.st_pass(p_other uuid)
@@ -460,6 +520,7 @@ create or replace function public.st_wave(p_hello uuid)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare u uuid := public.st_uid(); h public.st_hellos; cid uuid;
 begin
+  if public.st_banned(u) then raise exception 'not_found'; end if;
   select * into h from public.st_hellos where id = p_hello and to_id = u and status = 'open' and expires_at > now();
   if h.id is null then raise exception 'not_found'; end if;
   update public.st_hellos set status = 'waved' where id = h.id;
@@ -468,17 +529,19 @@ begin
   return jsonb_build_object('chatId', cid);
 end $$;
 
-create or replace function public.st_reply(p_hello uuid, p_body text)
+drop function if exists public.st_reply(uuid, text);
+create or replace function public.st_reply(p_hello uuid, p_body text, p_held boolean default false)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare u uuid := public.st_uid(); h public.st_hellos; cid uuid; b text := btrim(coalesce(p_body, ''));
 begin
   if length(b) < 1 or length(b) > 1000 then raise exception 'bad_message'; end if;
+  if public.st_banned(u) then raise exception 'not_found'; end if;
   select * into h from public.st_hellos where id = p_hello and to_id = u and status in ('open','waved') and expires_at > now();
   if h.id is null then raise exception 'not_found'; end if;
   update public.st_hellos set status = 'replied' where id = h.id;
   cid := public.st_open_chat(h.from_id, h.to_id, h.lane);
-  insert into public.st_messages (chat_id, from_id, body) values (cid, u, b);
-  insert into public.st_notify_queue (user_id, kind, ref) values (h.from_id, 'message', cid);
+  insert into public.st_messages (chat_id, from_id, body, held) values (cid, u, b, coalesce(p_held, false));
+  if not coalesce(p_held, false) then insert into public.st_notify_queue (user_id, kind, ref) values (h.from_id, 'message', cid); end if;
   return jsonb_build_object('chatId', cid);
 end $$;
 
@@ -498,7 +561,7 @@ begin
     'sent', coalesce((
       select jsonb_agg(jsonb_build_object('id', h.id, 'toId', h.to_id, 'firstName', p.first_name, 'createdAt', h.created_at) order by h.created_at desc)
       from public.st_hellos h join public.st_profiles p on p.user_id = h.to_id
-      where h.from_id = u and h.status = 'open' and h.expires_at > now()
+      where h.from_id = u and h.status in ('open','passed') and h.expires_at > now()
     ), '[]'::jsonb),
     'chats', coalesce((
       select jsonb_agg(jsonb_build_object(
@@ -507,7 +570,8 @@ begin
         'last', (select jsonb_build_object('body', m.body, 'fromMe', m.from_id = u, 'at', m.created_at) from public.st_messages m where m.chat_id = c.id and (not m.held or m.from_id = u) order by m.created_at desc limit 1)
       ) order by c.last_at desc)
       from public.st_chats c join public.st_profiles p on p.user_id = case when c.a_id = u then c.b_id else c.a_id end
-      where (c.a_id = u or c.b_id = u) and not exists (select 1 from public.st_blocks b where (b.user_id = u and b.other_id = p.user_id) or (b.user_id = p.user_id and b.other_id = u))
+      where (c.a_id = u or c.b_id = u) and not p.banned
+        and not exists (select 1 from public.st_blocks b where (b.user_id = u and b.other_id = p.user_id) or (b.user_id = p.user_id and b.other_id = u))
     ), '[]'::jsonb)
   );
 end $$;
@@ -529,7 +593,7 @@ begin
   return jsonb_build_object(
     'id', c.id, 'lane', c.lane,
     'other', (select public.st_card(p, u) from public.st_profiles p where p.user_id = other),
-    'blocked', exists (select 1 from public.st_blocks b where (b.user_id = u and b.other_id = other) or (b.user_id = other and b.other_id = u)),
+    'blocked', public.st_banned(u) or public.st_banned(other) or exists (select 1 from public.st_blocks b where (b.user_id = u and b.other_id = other) or (b.user_id = other and b.other_id = u)),
     'messages', coalesce((select jsonb_agg(jsonb_build_object('id', m.id, 'fromMe', m.from_id = u, 'body', m.body, 'held', m.held, 'at', m.created_at) order by m.created_at)
         from public.st_messages m where m.chat_id = c.id and (not m.held or m.from_id = u) and (p_since is null or m.created_at > p_since)), '[]'::jsonb),
     'cards', coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'questionId', k.question_id, 'question', k.question,
@@ -550,6 +614,7 @@ begin
   select * into c from public.st_chats where id = p_chat;
   if c.id is null or not (c.a_id = u or c.b_id = u) then raise exception 'not_found'; end if;
   other := case when c.a_id = u then c.b_id else c.a_id end;
+  if public.st_banned(u) or public.st_banned(other) then raise exception 'blocked'; end if;
   if exists (select 1 from public.st_blocks bl where (bl.user_id = u and bl.other_id = other) or (bl.user_id = other and bl.other_id = u)) then raise exception 'blocked'; end if;
   if (select count(*) from public.st_messages where from_id = u and created_at > now() - interval '1 hour') >= 120 then raise exception 'slow_down'; end if;
   insert into public.st_messages (chat_id, from_id, body, held) values (c.id, u, b, coalesce(p_held, false)) returning * into m;
@@ -571,9 +636,11 @@ create or replace function public.st_card_deal(p_chat uuid, p_question_id text, 
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare u uuid := public.st_uid(); k public.st_cards;
 begin
-  if not public.st_chat_member(p_chat, u) then raise exception 'not_found'; end if;
+  if public.st_banned(u) or not public.st_chat_member(p_chat, u) then raise exception 'not_found'; end if;
   if exists (select 1 from public.st_cards where chat_id = p_chat and revealed_at is null) then raise exception 'card_open'; end if;
-  insert into public.st_cards (chat_id, question_id, question) values (p_chat, left(p_question_id, 16), public.st_clean(p_question, 240)) returning * into k;
+  -- only deck ids (data/questions.json); the text is resolved client-side, never stored from the caller
+  if coalesce(p_question_id, '') !~ '^q[0-9]{3}$' then raise exception 'bad_card'; end if;
+  insert into public.st_cards (chat_id, question_id, question) values (p_chat, p_question_id, '') returning * into k;
   update public.st_chats set last_at = now() where id = p_chat;
   return jsonb_build_object('id', k.id);
 end $$;
@@ -583,6 +650,7 @@ returns jsonb language plpgsql security definer set search_path = public as $$
 declare u uuid := public.st_uid(); k public.st_cards; c public.st_chats; a text := btrim(coalesce(p_answer, '')); other uuid;
 begin
   if length(a) < 1 or length(a) > 280 then raise exception 'bad_answer'; end if;
+  if public.st_banned(u) then raise exception 'not_found'; end if;
   select * into k from public.st_cards where id = p_card;
   if k.id is null then raise exception 'not_found'; end if;
   select * into c from public.st_chats where id = k.chat_id;
@@ -633,6 +701,7 @@ declare u uuid := public.st_uid(); c public.st_chats; m public.st_meets; other u
 begin
   select * into c from public.st_chats where id = p_chat;
   if c.id is null or not (c.a_id = u or c.b_id = u) then raise exception 'not_found'; end if;
+  if public.st_banned(u) then raise exception 'not_found'; end if;
   if p_kind not in ('plan','place','standing') then raise exception 'bad_meet'; end if;
   other := case when c.a_id = u then c.b_id else c.a_id end;
   insert into public.st_meets (chat_id, proposer_id, kind, plan_id, place, at)
@@ -712,6 +781,7 @@ declare u uuid := public.st_uid();
 begin
   if p_reason not in ('fake','harassment','unsafe','minor','other') then raise exception 'bad_report'; end if;
   if p_about = u then raise exception 'bad_report'; end if;
+  if not exists (select 1 from public.st_profiles where user_id = u) then raise exception 'no_profile'; end if;
   if (select count(*) from public.st_reports where from_id = u and created_at > now() - interval '1 day') >= 10 then raise exception 'slow_down'; end if;
   insert into public.st_reports (from_id, about_id, reason, detail, ref) values (u, p_about, p_reason, public.st_clean(p_detail, 500), left(coalesce(p_ref, ''), 80));
   -- a report about a minor suppresses immediately, on one report
@@ -736,14 +806,30 @@ $$;
 -- Delete everything. Really. Cascades take profile, intent, photos rows, his,
 -- chats I'm in (and their messages), plan memberships, blocks, reports I made,
 -- push subs, the queue — and the auth user itself. Storage objects are
--- removed by the client before calling this (and by the nightly sweep).
+-- removed by the client before calling this and by the st-notify sweep
+-- (folders whose auth user no longer exists). Reports about or by the account
+-- are copied to st_report_archive first so a ban's paper trail survives.
 create or replace function public.st_delete_me()
 returns void language plpgsql security definer set search_path = public, auth as $$
 declare u uuid := public.st_uid();
 begin
+  insert into public.st_report_archive (id, from_id, about_id, reason, detail, ref, created_at, resolved_at, resolution, why)
+    select r.id, r.from_id, r.about_id, r.reason, r.detail, r.ref, r.created_at, r.resolved_at, r.resolution,
+           case when r.about_id = u then 'subject deleted account' else 'reporter deleted account' end
+    from public.st_reports r where r.about_id = u or r.from_id = u
+    on conflict (id) do nothing;
   delete from public.st_chats where a_id = u or b_id = u;
   delete from auth.users where id = u;
 end $$;
+
+-- service role only (st-notify): claim pending notifications atomically so two
+-- drains never deliver the same row twice
+create or replace function public.st_notify_claim(p_limit int default 50)
+returns setof public.st_notify_queue language sql security definer set search_path = public as $$
+  update public.st_notify_queue q set sent_at = now()
+  where q.id in (select id from public.st_notify_queue where sent_at is null order by created_at limit greatest(1, least(p_limit, 200)) for update skip locked)
+  returning q.*
+$$;
 
 -- ---------------------------------------------------------------- moderator back room
 
@@ -779,18 +865,26 @@ begin
 end $$;
 
 create or replace function public.st_mod_act(p_kind text, p_id text, p_action text)
-returns void language plpgsql security definer set search_path = public as $$
+returns void language plpgsql security definer set search_path = public, auth as $$
 begin
   if not public.st_is_mod() then raise exception 'not_mod'; end if;
   if p_kind = 'report' then
     update public.st_reports set resolved_at = now(), resolution = p_action where id = p_id::uuid;
     perform public.st_apply_reports((select about_id from public.st_reports where id = p_id::uuid));
+    -- dismissing the last open report about someone lifts the report-driven suppression
+    if p_action = 'dismissed' then
+      update public.st_profiles p set suppressed = false where p.user_id = (select about_id from public.st_reports where id = p_id::uuid)
+        and not p.banned and not exists (select 1 from public.st_reports r where r.about_id = p.user_id and r.resolved_at is null);
+    end if;
   elsif p_kind = 'profile' then
     if p_action = 'restore' then update public.st_profiles set suppressed = false, reports = 0 where user_id = p_id::uuid;
       update public.st_reports set resolved_at = now(), resolution = 'dismissed' where about_id = p_id::uuid and resolved_at is null;
     elsif p_action = 'suppress' then update public.st_profiles set suppressed = true where user_id = p_id::uuid;
     elsif p_action = 'ban' then update public.st_profiles set banned = true, suppressed = true where user_id = p_id::uuid;
       update public.st_reports set resolved_at = now(), resolution = 'banned' where about_id = p_id::uuid and resolved_at is null;
+      insert into public.st_banned_emails (email_hash) select public.st_email_hash(email) from auth.users where id = p_id::uuid on conflict do nothing;
+      -- open hi's from the banned account vanish from inboxes
+      update public.st_hellos set status = 'passed' where from_id = p_id::uuid and status = 'open';
     else raise exception 'bad_action'; end if;
   elsif p_kind = 'message' then
     if p_action = 'release' then update public.st_messages set held = false where id = p_id::uuid;
@@ -813,7 +907,7 @@ grant execute on function
   public.st_me(), public.st_save_profile(jsonb), public.st_set_visible(boolean), public.st_set_intent(jsonb),
   public.st_set_photo(int, text, text), public.st_remove_photo(int),
   public.st_browse(text, text, timestamptz), public.st_hi(uuid, text, text), public.st_pass(uuid), public.st_hi_pass(uuid),
-  public.st_wave(uuid), public.st_reply(uuid, text), public.st_inbox(), public.st_chat(uuid, timestamptz), public.st_send(uuid, text, boolean),
+  public.st_wave(uuid), public.st_reply(uuid, text, boolean), public.st_inbox(), public.st_chat(uuid, timestamptz), public.st_send(uuid, text, boolean),
   public.st_card_deal(uuid, text, text), public.st_card_answer(uuid, text),
   public.st_plan_join(text, boolean), public.st_plan_leave(text),
   public.st_meet_propose(uuid, text, text, jsonb, timestamptz), public.st_meet_respond(uuid, boolean), public.st_after(uuid, text),
@@ -821,23 +915,31 @@ grant execute on function
   public.st_push_save(text, jsonb), public.st_push_remove(text), public.st_delete_me(),
   public.st_hold(uuid, boolean), public.st_mod_queue(), public.st_mod_ratio(), public.st_mod_act(text, text, text)
   to authenticated;
+-- RLS policies run as the caller: the storage policy needs this one helper
+grant execute on function public.st_photo_visible(uuid, text) to authenticated;
+-- the notify drain runs with the service key
+grant execute on function public.st_notify_claim(int) to service_role;
 
--- realtime for messages + cards (the two tables with a SELECT policy)
+-- realtime for messages + chats (the two tables with a SELECT policy); cards
+-- were published before the answers leak was found — take them back out
 do $$ begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
     begin alter publication supabase_realtime add table public.st_messages; exception when duplicate_object then null; end;
-    begin alter publication supabase_realtime add table public.st_cards; exception when duplicate_object then null; end;
+    begin alter publication supabase_realtime add table public.st_chats; exception when duplicate_object then null; end;
+    begin alter publication supabase_realtime drop table public.st_cards; exception when undefined_object then null; end;
   end if;
 end $$;
 
 -- ---------------------------------------------------------------- storage bucket (photos)
--- Private bucket; signed-in members read via signed URLs; owners write their own folder.
+-- Private bucket; members WITH A PROFILE read via signed URLs (never blocked/hidden
+-- pairs, never banned callers — see st_photo_visible); owners write their own folder.
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('st-photos', 'st-photos', false, 2500000, array['image/jpeg','image/png','image/webp'])
 on conflict (id) do update set public = false, file_size_limit = 2500000, allowed_mime_types = array['image/jpeg','image/png','image/webp'];
 
 drop policy if exists st_photos_read on storage.objects;
-create policy st_photos_read on storage.objects for select to authenticated using (bucket_id = 'st-photos');
+create policy st_photos_read on storage.objects for select to authenticated
+  using (bucket_id = 'st-photos' and public.st_photo_visible(auth.uid(), (storage.foldername(name))[1]));
 drop policy if exists st_photos_write on storage.objects;
 create policy st_photos_write on storage.objects for insert to authenticated with check (bucket_id = 'st-photos' and (storage.foldername(name))[1] = auth.uid()::text);
 drop policy if exists st_photos_update on storage.objects;

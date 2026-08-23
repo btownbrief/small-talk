@@ -76,8 +76,8 @@ const network = {
     const path = `${uid}/${idx}.jpg`;
     const { error } = await c.storage.from(PHOTO_BUCKET).upload(path, blob, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
     if (error) throw new NetError('upload_failed', error.message);
-    await networkRpc('st_set_photo', { p_idx: idx, p_path: path, p_status: 'ok' });
-    moderatePhoto(path); // best-effort, async; flagged photos are removed server-side
+    await networkRpc('st_set_photo', { p_idx: idx, p_path: path });   // lands as 'pending'
+    moderatePhoto(path); // marks it ok/flagged; st-notify's sweep catches anything this misses
     return path;
   },
   async removePhoto(uid, idx) {
@@ -98,34 +98,22 @@ const network = {
     return out;
   },
   async subscribeChat(chatId, onChange) {
+    // messages arrive live; cards/meets bump st_chats.last_at (st_cards itself is not readable — it holds both answers).
+    // If realtime never connects, fall back to a 10s poll so the chat still moves.
     const c = await client();
+    let poll = null;
+    const startPoll = () => { if (!poll) poll = setInterval(() => onChange(), 10000); };
     const ch = c.channel(`st-chat-${chatId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'st_messages', filter: `chat_id=eq.${chatId}` }, () => onChange())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'st_cards', filter: `chat_id=eq.${chatId}` }, () => onChange())
-      .subscribe();
-    return () => { try { c.removeChannel(ch); } catch { /* fine */ } };
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'st_chats', filter: `id=eq.${chatId}` }, () => onChange())
+      .subscribe((status) => { if (status === 'SUBSCRIBED') { if (poll) { clearInterval(poll); poll = null; } } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startPoll(); });
+    const guard = setTimeout(() => { if (ch.state !== 'joined') startPoll(); }, 8000);
+    return () => { clearTimeout(guard); if (poll) clearInterval(poll); try { c.removeChannel(ch); } catch { /* fine */ } };
   },
-  async send(chatId, body) {
-    // prefer the moderating edge function; fall back to the plain RPC if it isn't deployed
-    try {
-      const s = await this.session();
-      const res = await fetch(`${SUPABASE_URL}/functions/v1/${MODERATE_FN}`, {
-        method: 'POST',
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${s?.access_token ?? SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, body }),
-      });
-      if (res.status === 404) throw new NetError('not_ready');
-      const data = await res.json().catch(() => null);
-      if (!res.ok || !data || data.error) throw new NetError(data?.error || `http_${res.status}`);
-      kickNotify();
-      return data;
-    } catch (e) {
-      if (e instanceof NetError && e.code !== 'not_ready' && e.code !== 'offline') throw e;
-      const r = await networkRpc('st_send', { p_chat: chatId, p_body: body, p_held: false });
-      kickNotify();
-      return r;
-    }
-  },
+  // hi + first reply go through the moderating function when it's there (fall back to the plain RPC on 404)
+  async hi(to, lane, note) { return viaModerate.call(this, { hi: { to, lane, note } }, () => networkRpc('st_hi', { p_to: to, p_lane: lane, p_note: note })); },
+  async reply(helloId, body) { return viaModerate.call(this, { reply: { hello: helloId, body } }, () => networkRpc('st_reply', { p_hello: helloId, p_body: body })); },
+  async send(chatId, body) { return viaModerate.call(this, { chat_id: chatId, body }, () => networkRpc('st_send', { p_chat: chatId, p_body: body, p_held: false })); },
   async plansFromUpForIt() {
     try {
       const rows = await networkRpc('uf_plans_public', {});
@@ -144,6 +132,28 @@ const network = {
   },
 };
 
+// prefer the moderating edge function; fall back to the plain RPC only if it isn't deployed / unreachable
+async function viaModerate(payload, fallback) {
+  try {
+    const s = await network.session();
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/${MODERATE_FN}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${s?.access_token ?? SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.status === 404) throw new NetError('not_ready');
+    const data = await res.json().catch(() => null);
+    if (!res.ok || !data || data.error) throw new NetError(data?.error || `http_${res.status}`);
+    kickNotify();
+    return data;
+  } catch (e) {
+    if (e instanceof NetError && e.code !== 'not_ready' && e.code !== 'offline') throw e;
+    const r = await fallback();
+    kickNotify();
+    return r;
+  }
+}
+
 function urlB64ToU8(s) {
   const pad = '='.repeat((4 - (s.length % 4)) % 4);
   const raw = atob((s + pad).replace(/-/g, '+').replace(/_/g, '/'));
@@ -153,13 +163,15 @@ function urlB64ToU8(s) {
 // Best-effort pokes at the optional edge functions. Failures are silence by design.
 export function kickNotify() {
   if (isDemo()) return;
-  try {
-    fetch(`${SUPABASE_URL}/functions/v1/${NOTIFY_FN}`, {
+  // the drain only answers to a signed-in member (or the cron) — never the bare anon key
+  network.session().then((s) => {
+    if (!s?.access_token) return;
+    return fetch(`${SUPABASE_URL}/functions/v1/${NOTIFY_FN}`, {
       method: 'POST', keepalive: true,
-      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}`, 'Content-Type': 'application/json' },
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${s.access_token}`, 'Content-Type': 'application/json' },
       body: '{}',
-    }).catch(() => {});
-  } catch { /* fine */ }
+    });
+  }).catch(() => {});
 }
 function moderatePhoto(path) {
   if (isDemo()) return;
@@ -189,6 +201,8 @@ function demoBackend() {
     photoUrls: async (paths) => demo.photoUrls(paths),
     subscribeChat: async (chatId, cb) => demo.subscribe(chatId, cb),
     send: async (chatId, body) => demo.rpc('st_send', { p_chat: chatId, p_body: body, p_held: /\bheldme\b/i.test(body) }),
+    hi: async (to, lane, note) => demo.rpc('st_hi', { p_to: to, p_lane: lane, p_note: note }),
+    reply: async (helloId, body) => demo.rpc('st_reply', { p_hello: helloId, p_body: body, p_held: /\bheldme\b/i.test(body) }),
     plansFromUpForIt: async () => demo.plansFromUpForIt(),
     enablePush: async () => ({ ok: false, why: 'demo' }),
   };
@@ -228,6 +242,11 @@ export function explain(err) {
     already_said_hi: 'You already said hi.',
     not_found: "That's not available.",
     bad_hi: 'One line — that’s the whole opener.',
+    flagged_hi: "That note didn't pass the automatic check. Try it another way.",
+    no_photo: 'Add at least one photo first.',
+    last_photo: 'Keep at least one photo on your profile.',
+    bad_card: 'That card isn’t in the deck.',
+    banned: 'This account can’t use Small Talk.',
     bad_message: 'Say something first (under 1,000 characters).',
     bad_profile: "Something's missing — check the highlighted fields.",
     too_young: 'Small Talk is for adults, 18 and up.',

@@ -2,7 +2,7 @@
 // and the Playwright playtest. Same RPC names, same error codes, same rules
 // (mirrors js/core.js). Saves nothing. Seeded with a small Burlington cast.
 
-import { clean, canSee, LIMITS, RATE, planFromUpForIt } from './core.js';
+import { clean, canSee, LIMITS, RATE, NEIGHBORHOODS, planFromUpForIt } from './core.js';
 
 const DEMO_UID = 'demo-0000-0000-0000-000000000000';
 const err = (code) => { const e = new Error(code); e.code = code; return e; };
@@ -67,15 +67,17 @@ export class FakeBackend {
   _isMod(u) { return this.mods.has(this.users.get(u)?.email); }
   _blocked(a, b) { return this.blocks.has(`${a}|${b}`) || this.blocks.has(`${b}|${a}`); }
   _excluded(v, t) { const p = this.profiles.get(t); return v === t || this._blocked(v, t) || !p || p.banned || p.suppressed || !p.visible; }
+  _banned(u) { return Boolean(this.profiles.get(u)?.banned); }
   _view(id) { const p = this.profiles.get(id); return p && { id, visible: p.visible, intent: this.intents.get(id) || { datingOpen: false, seeking: [] } }; }
   _age(y) { return new Date(this.now()).getUTCFullYear() - y; }
   _card(p, viewer) {
-    const hi = this.hellos.find((h) => h.from === viewer && h.to === p.id && new Date(h.expiresAt) > this.now() && h.status !== 'passed');
+    // a quietly declined ('passed') hi looks exactly like an open one to the sender
+    const hi = this.hellos.find((h) => h.from === viewer && h.to === p.id && new Date(h.expiresAt) > this.now());
     return {
       id: p.id, firstName: p.firstName, age: this._age(p.birthYear), neighborhood: p.neighborhood, tabs: [...p.tabs], prompts: p.prompts,
-      photos: (this.photos.get(p.id) || []).filter((x) => x.status === 'ok').map((x) => x.path),
+      photos: (this.photos.get(p.id) || []).filter((x) => x.status === 'ok' || x.status === 'pending').map((x) => x.path),
       plans: this.planMembers.filter((m) => m.user === p.id && m.showName).map((m) => m.plan),
-      createdAt: p.createdAt, hi: hi ? { id: hi.id, status: hi.status } : null,
+      createdAt: p.createdAt, hi: hi ? { id: hi.id, status: hi.status === 'passed' ? 'open' : hi.status } : null,
     };
   }
   _chatOf(id, u) { const c = this.chats.find((x) => x.id === id); if (!c || (c.a !== u && c.b !== u)) throw err('not_found'); return c; }
@@ -122,7 +124,10 @@ export class FakeBackend {
   rpc_st_save_profile({ p }) {
     const u = this._uid();
     const firstName = clean(p.firstName, 24); if (!firstName) throw err('bad_profile');
+    if (this._banned(u)) throw err('banned');
+    if (!NEIGHBORHOODS.some((n) => n.id === p.neighborhood)) throw err('bad_profile');
     const y = Number(p.birthYear); if (!Number.isInteger(y) || this._age(y) < 18 || this._age(y) > 110) throw err('too_young');
+    if (!(this.photos.get(u) || []).some((x) => x.status !== 'flagged')) throw err('no_photo');
     const tabs = [...new Set((p.tabs || []).filter((t) => ['dogs', 'trails', 'music', 'games'].includes(t)))].slice(0, 4);
     const seen = new Set();
     const prompts = (p.prompts || []).map((x) => ({ id: x.id, a: clean(x.a, 140) })).filter((x) => x.a && !seen.has(x.id) && seen.add(x.id)).slice(0, 3);
@@ -143,10 +148,15 @@ export class FakeBackend {
     return this.rpc_st_me();
   }
   rpc_st_set_photo({ p_idx, p_path }) { const u = this._uid(); if (!p_path.startsWith(`${u}/`)) throw err('bad_photo'); this.uploadPhoto(u, p_idx); }
-  rpc_st_remove_photo({ p_idx }) { const u = this._uid(); this.photos.set(u, (this.photos.get(u) || []).filter((x) => x.idx !== p_idx)); }
+  rpc_st_remove_photo({ p_idx }) {
+    const u = this._uid(); const rest = (this.photos.get(u) || []).filter((x) => x.idx !== p_idx);
+    if (this.profiles.has(u) && !rest.some((x) => x.status !== 'flagged')) throw err('last_photo');
+    this.photos.set(u, rest);
+  }
 
   rpc_st_browse({ p_lane = 'friends', p_tab = null, p_before = null }) {
     const u = this._uid(); if (!this.profiles.get(u)) throw err('no_profile');
+    if (this._banned(u)) throw err('banned');
     if (!['friends', 'dating'].includes(p_lane)) throw err('bad_lane');
     const me = this._view(u);
     return [...this.profiles.values()]
@@ -159,14 +169,18 @@ export class FakeBackend {
     const u = this._uid(); const n = clean(p_note, LIMITS.hiMax);
     if (!['friends', 'dating'].includes(p_lane)) throw err('bad_lane');
     if (!n) throw err('bad_hi');
+    if (this._banned(u)) throw err('not_found');
     if (p_to === u || !this.profiles.has(p_to) || this._excluded(u, p_to) || !canSee(this._view(u), this._view(p_to), p_lane)) throw err('not_found');
     const dayAgo = this.now() - DAY, weekAgo = this.now() - 7 * DAY;
     if (this.hellos.filter((h) => h.from === u && new Date(h.createdAt) > dayAgo).length >= RATE.hisPerDay) throw err('slow_down');
+    if (new Set(this.hellos.filter((h) => h.from === u && h.to !== p_to && new Date(h.createdAt) > weekAgo).map((h) => h.to)).size >= RATE.hiPeoplePerWeek) throw err('slow_down');
     if (p_lane === 'dating' && this.hellos.filter((h) => h.from === u && h.lane === 'dating' && new Date(h.createdAt) > weekAgo).length >= LIMITS.datingHiPerWeek) throw err('dating_cap');
     const ex = this.hellos.find((h) => h.from === u && h.to === p_to);
-    if (ex && new Date(ex.expiresAt) > this.now() && ex.status !== 'passed') throw err('already_said_hi');
+    if (ex && new Date(ex.expiresAt) > this.now()) throw err('already_said_hi');
+    // a re-hi to someone who quietly declined stays declined: sender sees "open", recipient is never bothered
+    const status = ex?.status === 'passed' ? 'passed' : 'open';
     if (ex) this.hellos.splice(this.hellos.indexOf(ex), 1);
-    const h = { id: uid('hi'), from: u, to: p_to, lane: p_lane, note: n, status: 'open', createdAt: iso(this.now()), expiresAt: iso(this.now() + LIMITS.hiExpiryDays * DAY) };
+    const h = { id: uid('hi'), from: u, to: p_to, lane: p_lane, note: n, status, createdAt: iso(this.now()), expiresAt: iso(this.now() + LIMITS.hiExpiryDays * DAY) };
     this.hellos.push(h);
     return { id: h.id, status: 'open' };
   }
@@ -174,19 +188,19 @@ export class FakeBackend {
   rpc_st_hi_pass({ p_hello }) { const u = this._uid(); const h = this.hellos.find((x) => x.id === p_hello && x.to === u); if (h) h.status = 'passed'; }
   rpc_st_wave({ p_hello }) {
     const u = this._uid(); const h = this.hellos.find((x) => x.id === p_hello && x.to === u && x.status === 'open' && new Date(x.expiresAt) > this.now());
-    if (!h) throw err('not_found');
+    if (!h || this._banned(u)) throw err('not_found');
     h.status = 'waved';
     return { chatId: this._openChat(h.from, h.to, h.lane).id };
   }
-  rpc_st_reply({ p_hello, p_body }) {
+  rpc_st_reply({ p_hello, p_body, p_held = false }) {
     const u = this._uid(); const b = String(p_body ?? '').trim(); if (!b || b.length > 1000) throw err('bad_message');
     const h = this.hellos.find((x) => x.id === p_hello && x.to === u && ['open', 'waved'].includes(x.status) && new Date(x.expiresAt) > this.now());
-    if (!h) throw err('not_found');
+    if (!h || this._banned(u)) throw err('not_found');
     h.status = 'replied';
     const c = this._openChat(h.from, h.to, h.lane);
-    this.messages.push({ id: uid('m'), chat: c.id, from: u, body: b, held: false, at: iso(this.now()) });
+    this.messages.push({ id: uid('m'), chat: c.id, from: u, body: b, held: Boolean(p_held), at: iso(this.now()) });
     this._changed(c.id);
-    this._autoReply(c, h.from, b);
+    if (!p_held) this._autoReply(c, h.from, b);
     return { chatId: c.id };
   }
 
@@ -195,9 +209,9 @@ export class FakeBackend {
     return {
       received: this.hellos.filter((h) => h.to === u && h.status === 'open' && new Date(h.expiresAt) > now && !this._excluded(u, h.from) && this.profiles.has(h.from))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).map((h) => ({ id: h.id, lane: h.lane, note: h.note, createdAt: h.createdAt, from: this._card(this.profiles.get(h.from), u) })),
-      sent: this.hellos.filter((h) => h.from === u && h.status === 'open' && new Date(h.expiresAt) > now && this.profiles.has(h.to))
+      sent: this.hellos.filter((h) => h.from === u && (h.status === 'open' || h.status === 'passed') && new Date(h.expiresAt) > now && this.profiles.has(h.to))
         .map((h) => ({ id: h.id, toId: h.to, firstName: this.profiles.get(h.to).firstName, createdAt: h.createdAt })),
-      chats: this.chats.filter((c) => (c.a === u || c.b === u) && !this._blocked(c.a, c.b)).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).map((c) => {
+      chats: this.chats.filter((c) => (c.a === u || c.b === u) && !this._blocked(c.a, c.b) && !this._banned(c.a === u ? c.b : c.a)).sort((a, b) => b.lastAt.localeCompare(a.lastAt)).map((c) => {
         const other = c.a === u ? c.b : c.a;
         const last = [...this.messages].reverse().find((m) => m.chat === c.id && (!m.held || m.from === u));
         return { id: c.id, lane: c.lane, lastAt: c.lastAt, other: this._card(this.profiles.get(other), u), last: last ? { body: last.body, fromMe: last.from === u, at: last.at } : null };
@@ -208,7 +222,7 @@ export class FakeBackend {
   rpc_st_chat({ p_chat, p_since = null }) {
     const u = this._uid(); const c = this._chatOf(p_chat, u); const other = c.a === u ? c.b : c.a;
     return {
-      id: c.id, lane: c.lane, other: this._card(this.profiles.get(other), u), blocked: this._blocked(u, other),
+      id: c.id, lane: c.lane, other: this._card(this.profiles.get(other), u), blocked: this._blocked(u, other) || this._banned(u) || this._banned(other),
       messages: this.messages.filter((m) => m.chat === c.id && (!m.held || m.from === u) && (!p_since || m.at > p_since)).map((m) => ({ id: m.id, fromMe: m.from === u, body: m.body, held: m.held, at: m.at })),
       cards: this.cards.filter((k) => k.chat === c.id).map((k) => ({ id: k.id, questionId: k.questionId, question: k.question, mine: k.answers[u] ?? null, theirs: k.revealedAt ? k.answers[other] ?? null : null, revealed: Boolean(k.revealedAt), at: k.at })),
       meets: this.meets.filter((m) => m.chat === c.id).map((m) => ({ id: m.id, mine: m.proposer === u, kind: m.kind, planId: m.planId, place: m.place, at: m.at, status: m.status, myAfter: m.after[u] ?? null, createdAt: m.createdAt })),
@@ -217,7 +231,7 @@ export class FakeBackend {
   rpc_st_send({ p_chat, p_body, p_held = false }) {
     const u = this._uid(); const b = String(p_body ?? '').trim(); if (!b || b.length > 1000) throw err('bad_message');
     const c = this._chatOf(p_chat, u); const other = c.a === u ? c.b : c.a;
-    if (this._blocked(u, other)) throw err('blocked');
+    if (this._blocked(u, other) || this._banned(u) || this._banned(other)) throw err('blocked');
     const m = { id: uid('m'), chat: c.id, from: u, body: b, held: Boolean(p_held), at: iso(this.now()) };
     this.messages.push(m); c.lastAt = m.at; this._changed(c.id);
     if (!m.held) this._autoReply(c, other, b);
@@ -232,8 +246,11 @@ export class FakeBackend {
   }
   rpc_st_card_deal({ p_chat, p_question_id, p_question }) {
     const u = this._uid(); const c = this._chatOf(p_chat, u);
+    if (this._banned(u)) throw err('not_found');
     if (this.cards.some((k) => k.chat === c.id && !k.revealedAt)) throw err('card_open');
-    const k = { id: uid('card'), chat: c.id, questionId: p_question_id, question: clean(p_question, 240), answers: {}, at: iso(this.now()), revealedAt: null };
+    if (!/^q\d{3}$/.test(String(p_question_id || ''))) throw err('bad_card');
+    void p_question; // deck id only — the text is resolved client-side, never stored from the caller
+    const k = { id: uid('card'), chat: c.id, questionId: p_question_id, question: '', answers: {}, at: iso(this.now()), revealedAt: null };
     this.cards.push(k); c.lastAt = k.at; this._changed(c.id);
     // demo: the other side answers after a beat
     const other = c.a === u ? c.b : c.a; const p = this.profiles.get(other);
@@ -298,6 +315,7 @@ export class FakeBackend {
   rpc_st_report({ p_about, p_reason, p_detail = '', p_ref = '' }) {
     const u = this._uid();
     if (!['fake', 'harassment', 'unsafe', 'minor', 'other'].includes(p_reason) || p_about === u) throw err('bad_report');
+    if (!this.profiles.has(u)) throw err('no_profile');
     if (this.reports.filter((r) => r.from === u && new Date(r.createdAt) > this.now() - DAY).length >= RATE.reportsPerDay) throw err('slow_down');
     this.reports.push({ id: uid('r'), from: u, about: p_about, reason: p_reason, detail: clean(p_detail, 500), ref: p_ref, createdAt: iso(this.now()), resolvedAt: null });
     if (p_reason === 'minor') { const p = this.profiles.get(p_about); if (p) p.suppressed = true; }
@@ -329,16 +347,23 @@ export class FakeBackend {
   rpc_st_mod_ratio() {
     const u = this._uid(); if (!this._isMod(u)) throw err('not_mod');
     const by = {}; for (const [id, i] of this.intents) if (i.datingOpen && this.profiles.has(id)) by[i.gender] = (by[i.gender] || 0) + 1;
-    return { members: this.profiles.size, datingOpen: by, datingHis7d: {}, datingReplied7d: {} };
+    return { members: [...this.profiles.values()].filter((p) => !p.banned).length, datingOpen: by, datingHis7d: {}, datingReplied7d: {} };
   }
   rpc_st_mod_act({ p_kind, p_id, p_action }) {
     const u = this._uid(); if (!this._isMod(u)) throw err('not_mod');
-    if (p_kind === 'report') { const r = this.reports.find((x) => x.id === p_id); if (r) { r.resolvedAt = iso(this.now()); this._applyReports(r.about); } }
+    if (p_kind === 'report') {
+      const r = this.reports.find((x) => x.id === p_id);
+      if (r) {
+        r.resolvedAt = iso(this.now()); this._applyReports(r.about);
+        const p = this.profiles.get(r.about);
+        if (p_action === 'dismissed' && p && !p.banned && !this.reports.some((x) => x.about === r.about && !x.resolvedAt)) p.suppressed = false;
+      }
+    }
     else if (p_kind === 'profile') {
       const p = this.profiles.get(p_id); if (!p) return;
       if (p_action === 'restore') { p.suppressed = false; p.reports = 0; for (const r of this.reports) if (r.about === p_id && !r.resolvedAt) r.resolvedAt = iso(this.now()); }
       else if (p_action === 'suppress') p.suppressed = true;
-      else if (p_action === 'ban') { p.banned = true; p.suppressed = true; for (const r of this.reports) if (r.about === p_id && !r.resolvedAt) r.resolvedAt = iso(this.now()); }
+      else if (p_action === 'ban') { p.banned = true; p.suppressed = true; for (const r of this.reports) if (r.about === p_id && !r.resolvedAt) r.resolvedAt = iso(this.now()); for (const h of this.hellos) if (h.from === p_id && h.status === 'open') h.status = 'passed'; }
     } else if (p_kind === 'message') {
       const m = this.messages.find((x) => x.id === p_id); if (!m) return;
       if (p_action === 'release') m.held = false; else if (p_action === 'delete') this.messages.splice(this.messages.indexOf(m), 1);

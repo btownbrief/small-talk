@@ -1,10 +1,13 @@
-// st-moderate — OPTIONAL but recommended. Two jobs:
-//   1. POST { chat_id, body }   → runs OpenAI moderation on the text, then
-//      inserts the message via st_send AS THE CALLER (their JWT), held=true
-//      if flagged. Held messages are visible only to the sender until a
-//      moderator releases them in mod.html.
-//   2. POST { photo_path }      → runs moderation on a just-uploaded photo;
-//      if flagged, deletes the object and marks the row 'flagged'.
+// st-moderate — OPTIONAL but recommended. Four jobs, all AS THE CALLER (their JWT):
+//   1. POST { chat_id, body }       → OpenAI moderation on the text, then st_send
+//      with held=true if flagged. Held messages are visible only to the sender
+//      until a moderator releases them in mod.html.
+//   2. POST { hi: {to, lane, note} } → moderation on the hi note; a flagged note
+//      is refused outright ('flagged_hi' — there is no "held" for a first line).
+//   3. POST { reply: {hello, body} } → moderation, then st_reply held=flagged.
+//   4. POST { photo_path }          → moderation on a just-uploaded photo; marks
+//      the row ok, or deletes the object and marks it flagged. (st-notify also
+//      sweeps anything still pending, so a client that skips this call gains nothing.)
 // Without OPENAI_API_KEY the function still works: it inserts unmoderated
 // (held=false) and says so in the response — the client can't tell, the
 // queue is still there. Without the function at all (404) the client falls
@@ -62,6 +65,25 @@ Deno.serve(async (req) => {
     return json({ ...(data as object), moderation: m.why });
   }
 
+  if (body.hi && typeof body.hi.to === 'string' && typeof body.hi.note === 'string') {
+    const note = body.hi.note.trim().slice(0, 140);
+    if (!note) return json({ error: 'bad_hi' }, 400);
+    const m = await moderate(note);
+    if (m.flagged) return json({ error: 'flagged_hi', moderation: m.why }, 400);
+    const { data, error } = await asUser.rpc('st_hi', { p_to: body.hi.to, p_lane: body.hi.lane, p_note: note });
+    if (error) return json({ error: String(error.message).split(':')[0] }, 400);
+    return json({ ...(data as object), moderation: m.why });
+  }
+
+  if (body.reply && typeof body.reply.hello === 'string' && typeof body.reply.body === 'string') {
+    const text = body.reply.body.trim().slice(0, 1000);
+    if (!text) return json({ error: 'bad_message' }, 400);
+    const m = await moderate(text);
+    const { data, error } = await asUser.rpc('st_reply', { p_hello: body.reply.hello, p_body: text, p_held: m.flagged });
+    if (error) return json({ error: String(error.message).split(':')[0] }, 400);
+    return json({ ...(data as object), held: m.flagged, moderation: m.why });
+  }
+
   if (typeof body.photo_path === 'string') {
     // who is calling? (the RPC below will fail for anyone else's path anyway)
     const { data: u } = await asUser.auth.getUser();
@@ -71,12 +93,14 @@ Deno.serve(async (req) => {
     const { data: signed } = await service.storage.from('st-photos').createSignedUrl(body.photo_path, 120);
     if (!signed?.signedUrl) return json({ ok: false, why: 'no_url' });
     const m = await moderate([{ type: 'image_url', image_url: { url: signed.signedUrl } }]);
+    const idx = Number(body.photo_path.match(/\/(\d)\.\w+$/)?.[1] ?? 0);
     if (m.flagged) {
       await service.storage.from('st-photos').remove([body.photo_path]);
-      const idx = Number(body.photo_path.match(/\/(\d)\.\w+$/)?.[1] ?? 0);
       await service.from('st_photos').update({ status: 'flagged' }).eq('user_id', uid).eq('idx', idx);
       return json({ ok: true, flagged: true, why: m.why });
     }
+    // only 'pending' → 'ok' (never un-flags); if OpenAI errored, leave it pending for the st-notify sweep
+    if (m.why === 'ok' || m.why === 'no_key') await service.from('st_photos').update({ status: 'ok' }).eq('user_id', uid).eq('idx', idx).eq('status', 'pending');
     return json({ ok: true, flagged: false, why: m.why });
   }
   return json({ error: 'bad_request' }, 400);

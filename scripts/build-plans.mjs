@@ -11,7 +11,7 @@
 // Plans travel as a place and a time; nothing about people rides along.
 
 import { writeFileSync, readFileSync } from 'node:fs';
-import { tabForEvent } from '../js/core.js';
+import { tabForEvent, httpsOnly } from '../js/core.js';
 
 const FEED = 'https://guide.btownbrief.com/data/events/events.json';
 const OUT = new URL('../data/plans.json', import.meta.url);
@@ -42,7 +42,7 @@ function toPlan(ev) {
     neighborhood: ev.town && ev.town !== 'Burlington' ? ev.town : null,
     startsAt: ev.start, endsAt: ev.end ?? null,
     tab, cap: null, going: 0, host: null,
-    url: ev.url ?? null, source: 'events', status: 'dated',
+    url: httpsOnly(ev.url), source: 'events', status: 'dated',
     price: ev.free ? 'Free' : (ev.price ? String(ev.price).slice(0, 40) : null),
   };
 }

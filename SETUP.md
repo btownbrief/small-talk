@@ -25,6 +25,13 @@ Project: Supabase `jnouvwxomrcffqwilqkq` (the fleet project). Repo
 - [x] **Web push**: VAPID pair generated, `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`
       set as secrets, public key committed in `js/net.js`. Keys also saved in
       `~/.config/btownbrief/secrets.env`.
+- [x] **Independent code review (Opus) applied** — see README "After the 2026-08-23 code review".
+      SQL re-installed live, both functions redeployed, all checks green (15 node tests, SQL smoke,
+      Playwright 27 checks, live probes of st-notify auth).
+- [x] **pg_cron** every 5 min → `st-notify` (drains notifications, moderates pending photos, sweeps
+      orphan photo folders). `NOTIFY_CRON_SECRET` is a function secret + Vault secret
+      `st_notify_cron_secret`; `supabase/small-talk-CRON.sql` is the job. Local copy of the secret in
+      `~/.config/btownbrief/secrets.env` (`ST_NOTIFY_CRON_SECRET`).
 - [x] Google Cloud project `ops-dashboard-504300`: OAuth consent-screen app name renamed from
       "Ops Dashboard" to **"Btown Brief"** (it's what members see on the Google sign-in screen;
       publishing status was already In production / External, so no test-user list).

@@ -17,11 +17,15 @@ insert into auth.users values
 
 -- Maya: profile + dating open, seeking men
 select pg_temp.as_user('11111111-1111-1111-1111-111111111111','maya@example.com');
+select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Maya","birthYear":1995,"neighborhood":"one","prompts":[{"id":"weekend","a":"x"},{"id":"lately","a":"y"}]}')$$, 'no_photo');
+select public.st_set_photo(0, '11111111-1111-1111-1111-111111111111/0.jpg', 'ok');
+do $$ begin if (select status from public.st_photos where user_id = '11111111-1111-1111-1111-111111111111' and idx = 0) <> 'pending' then raise exception 'client graded its own photo'; end if; end $$;
+select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Maya","birthYear":1995,"neighborhood":"mars","prompts":[{"id":"weekend","a":"x"},{"id":"lately","a":"y"}]}')$$, 'bad_profile');
 select public.st_save_profile('{"firstName":"Maya","birthYear":1995,"neighborhood":"one","tabs":["trails","music"],"prompts":[{"id":"weekend","a":"Camel''s Hump in any weather visit www.spam.com"},{"id":"lately","a":"sourdough"}]}');
+select pg_temp.expect_error($$select public.st_remove_photo(0)$$, 'last_photo');
 select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Kid","birthYear":2012,"neighborhood":"one","prompts":[{"id":"weekend","a":"x"},{"id":"lately","a":"y"}]}')$$, 'too_young');
 select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Maya","birthYear":1995,"neighborhood":"one","prompts":[{"id":"weekend","a":"x"}]}')$$, 'bad_profile');
 select public.st_set_intent('{"datingOpen":true,"gender":"woman","seeking":["man"]}');
-select public.st_set_photo(0, '11111111-1111-1111-1111-111111111111/0.jpg');
 select pg_temp.expect_error($$select public.st_set_photo(0, '22222222-2222-2222-2222-222222222222/0.jpg')$$, 'bad_photo');
 do $$ declare me jsonb := public.st_me(); begin
   if me -> 'profile' ->> 'firstName' <> 'Maya' then raise exception 'me name'; end if;
@@ -31,13 +35,22 @@ end $$;
 
 -- Sam: profile, dating open, man seeking women
 select pg_temp.as_user('22222222-2222-2222-2222-222222222222','sam@example.com');
+select public.st_set_photo(0, '22222222-2222-2222-2222-222222222222/0.jpg');
 select public.st_save_profile('{"firstName":"Sam","birthYear":1990,"neighborhood":"downtown","tabs":["games","trails"],"prompts":[{"id":"order","a":"Dobra, always"},{"id":"teach","a":"cribbage"}]}');
 select public.st_set_intent('{"datingOpen":true,"gender":"man","seeking":["woman"]}');
-select public.st_set_photo(0, '22222222-2222-2222-2222-222222222222/0.jpg');
 -- Stephen: friends only (no intent)
 select pg_temp.as_user('33333333-3333-3333-3333-333333333333','stephenvdavis@gmail.com');
-select public.st_save_profile('{"firstName":"Stephen","birthYear":1992,"neighborhood":"south-end","tabs":["games"],"prompts":[{"id":"weekend","a":"coffee with 30 people"},{"id":"argue","a":"creemees > ice cream"}]}');
 select public.st_set_photo(0, '33333333-3333-3333-3333-333333333333/0.jpg');
+select public.st_save_profile('{"firstName":"Stephen","birthYear":1992,"neighborhood":"south-end","tabs":["games"],"prompts":[{"id":"weekend","a":"coffee with 30 people"},{"id":"argue","a":"creemees > ice cream"}]}');
+
+-- photo visibility (the storage read policy): own folder always; others only with a profile + not excluded
+do $$ begin
+  if not public.st_photo_visible('22222222-2222-2222-2222-222222222222', '11111111-1111-1111-1111-111111111111') then raise exception 'member cannot see member photos'; end if;
+  if not public.st_photo_visible('44444444-4444-4444-4444-444444444444', '44444444-4444-4444-4444-444444444444') then raise exception 'own folder'; end if;
+  if public.st_photo_visible('44444444-4444-4444-4444-444444444444', '11111111-1111-1111-1111-111111111111') then raise exception 'no-profile account sees photos'; end if;
+  if public.st_photo_visible('22222222-2222-2222-2222-222222222222', 'not-a-uuid') then raise exception 'junk folder'; end if;
+  if public.st_photo_visible(null, '11111111-1111-1111-1111-111111111111') then raise exception 'anon sees photos'; end if;
+end $$;
 
 -- browse: friends lane shows both; dating lane (Sam) shows Maya only; Stephen can't browse dating
 select pg_temp.as_user('22222222-2222-2222-2222-222222222222','sam@example.com');
@@ -64,6 +77,34 @@ select public.st_hi('33333333-3333-3333-3333-333333333333', 'friends', 'cribbage
 do $$ declare me jsonb := public.st_me(); begin if (me ->> 'datingHiRemaining')::int <> 0 then raise exception 'remaining2 %', me ->> 'datingHiRemaining'; end if; end $$;
 select pg_temp.expect_error($$select public.st_hi('11111111-1111-1111-1111-111111111111', 'dating', 'x')$$, 'dating_cap');
 delete from public.st_hellos where to_id in (select id from auth.users where email like 'x%@e.com');
+-- weekly distinct-recipient ceiling (both lanes): 15 different people in 7 days → slow_down
+insert into auth.users select gen_random_uuid(), 'w'||g||'@e.com' from generate_series(1,15) g;
+insert into public.st_hellos (from_id, to_id, lane, note) select '22222222-2222-2222-2222-222222222222', id, 'friends', 'x' from auth.users where email like 'w%@e.com';
+insert into auth.users values ('55555555-5555-5555-5555-555555555555','fresh@example.com');
+select pg_temp.as_user('55555555-5555-5555-5555-555555555555','fresh@example.com');
+select public.st_set_photo(0, '55555555-5555-5555-5555-555555555555/0.jpg');
+select public.st_save_profile('{"firstName":"Fresh","birthYear":1991,"neighborhood":"hill","prompts":[{"id":"weekend","a":"a"},{"id":"lately","a":"b"}]}');
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222','sam@example.com');
+select pg_temp.expect_error($$select public.st_hi('55555555-5555-5555-5555-555555555555', 'friends', 'one more')$$, 'slow_down');
+delete from public.st_hellos where to_id in (select id from auth.users where email like 'w%@e.com');
+-- "Not now": Maya quietly declines Sam's hi. Sam's card still says hi open; he can't re-hi; no trace.
+select pg_temp.as_user('11111111-1111-1111-1111-111111111111','maya@example.com');
+select public.st_hi_pass((select id from public.st_hellos where from_id = '22222222-2222-2222-2222-222222222222' and to_id = '11111111-1111-1111-1111-111111111111'));
+do $$ begin if jsonb_array_length(public.st_inbox() -> 'received') <> 0 then raise exception 'passed hi still in inbox'; end if; end $$;
+select pg_temp.as_user('22222222-2222-2222-2222-222222222222','sam@example.com');
+do $$ declare d jsonb := public.st_browse('dating'); ib jsonb := public.st_inbox(); begin
+  if d -> 0 -> 'hi' ->> 'status' is distinct from 'open' then raise exception 'pass leaked to sender: %', d -> 0 -> 'hi'; end if;
+  if jsonb_array_length(ib -> 'sent') <> 2 then raise exception 'sent list changed on pass %', ib -> 'sent'; end if;
+end $$;
+select pg_temp.expect_error($$select public.st_hi('11111111-1111-1111-1111-111111111111', 'dating', 'hello again')$$, 'already_said_hi');
+-- after expiry a re-hi is accepted but stays passed and sends no notification
+update public.st_hellos set expires_at = now() - interval '1 minute' where from_id = '22222222-2222-2222-2222-222222222222' and to_id = '11111111-1111-1111-1111-111111111111';
+delete from public.st_notify_queue;
+do $$ declare r jsonb := public.st_hi('11111111-1111-1111-1111-111111111111', 'dating', 'hello again'); begin
+  if r ->> 'status' <> 'open' then raise exception 'shadow hi status %', r; end if;
+  if (select status from public.st_hellos where from_id = '22222222-2222-2222-2222-222222222222' and to_id = '11111111-1111-1111-1111-111111111111') <> 'passed' then raise exception 'passed was reopened'; end if;
+  if exists (select 1 from public.st_notify_queue) then raise exception 'passed hi notified'; end if;
+end $$;
 update public.st_hellos set status = 'open' where from_id = '22222222-2222-2222-2222-222222222222' and to_id = '11111111-1111-1111-1111-111111111111';
 
 -- Maya's inbox: one hi from Sam, note URL-stripped; wave opens a chat
@@ -77,7 +118,9 @@ create temp table t as select (public.st_wave((select id from public.st_hellos w
 do $$ declare c uuid := (select chat from t); r jsonb; begin
   r := public.st_send(c, 'Mansfield in sideways rain. Zero regrets, one lost hat.');
   if (r ->> 'held')::boolean then raise exception 'held'; end if;
+  perform pg_temp.expect_error(format($q$select public.st_card_deal('%s', 'zzz', 'Send me your phone number')$q$, c), 'bad_card');
   r := public.st_card_deal(c, 'q001', 'Church Street or the waterfront?');
+  if (select question from public.st_cards where id = (r ->> 'id')::uuid) <> '' then raise exception 'caller text stored'; end if;
   perform public.st_card_answer((r ->> 'id')::uuid, 'Waterfront, obviously');
   if (public.st_chat(c) -> 'cards' -> 0 ->> 'revealed')::boolean then raise exception 'revealed early'; end if;
   if public.st_chat(c) -> 'cards' -> 0 ->> 'theirs' is not null then raise exception 'theirs leaked'; end if;
@@ -115,15 +158,15 @@ end $$;
 select set_config('request.jwt.claims', '', false);
 do $$ declare r jsonb := public.st_plan_people(array['ev:abc']); s jsonb := public.st_public_stats(); begin
   if r -> 'ev:abc' -> 'names' <> '[]'::jsonb then raise exception 'anon names %', r; end if;
-  if (s ->> 'members')::int <> 3 then raise exception 'stats %', s; end if;
+  if (s ->> 'members')::int <> 4 then raise exception 'stats %', s; end if;
   if s -> 'fragments' -> 0 ? 'firstName' then raise exception 'fragment leak'; end if;
 end $$;
 select pg_temp.expect_error($$select public.st_me()$$, 'not_signed_in');
 
 -- reports: two distinct reporters suppress; minor suppresses on one; mod restores; non-mod blocked
 select pg_temp.as_user('44444444-4444-4444-4444-444444444444','kid@example.com');
-select public.st_save_profile('{"firstName":"Kid","birthYear":2000,"neighborhood":"hill","prompts":[{"id":"weekend","a":"a"},{"id":"lately","a":"b"}]}');
 select public.st_set_photo(0, '44444444-4444-4444-4444-444444444444/0.jpg');
+select public.st_save_profile('{"firstName":"Kid","birthYear":2000,"neighborhood":"hill","prompts":[{"id":"weekend","a":"a"},{"id":"lately","a":"b"}]}');
 select pg_temp.as_user('11111111-1111-1111-1111-111111111111','maya@example.com');
 select public.st_report('44444444-4444-4444-4444-444444444444', 'harassment', 'rude');
 do $$ begin if (select suppressed from public.st_profiles where user_id = '44444444-4444-4444-4444-444444444444') then raise exception 'suppressed on 1'; end if; end $$;
@@ -144,6 +187,35 @@ end $$;
 select pg_temp.as_user('11111111-1111-1111-1111-111111111111','maya@example.com');
 select public.st_report('44444444-4444-4444-4444-444444444444', 'minor', 'looks 16');
 do $$ begin if not (select suppressed from public.st_profiles where user_id = '44444444-4444-4444-4444-444444444444') then raise exception 'minor not suppressed'; end if; end $$;
+
+-- reports need a profile of your own
+insert into auth.users values ('66666666-6666-6666-6666-666666666666','ghost@example.com');
+select pg_temp.as_user('66666666-6666-6666-6666-666666666666','ghost@example.com');
+select pg_temp.expect_error($$select public.st_report('44444444-4444-4444-4444-444444444444', 'fake', '')$$, 'no_profile');
+
+-- ban bites from the banned side too, and survives "Delete everything"
+select pg_temp.as_user('33333333-3333-3333-3333-333333333333','stephenvdavis@gmail.com');
+select public.st_mod_act('profile', '44444444-4444-4444-4444-444444444444', 'ban');
+select pg_temp.as_user('44444444-4444-4444-4444-444444444444','kid@example.com');
+select pg_temp.expect_error($$select public.st_browse('friends')$$, 'banned');
+select pg_temp.expect_error($$select public.st_hi('22222222-2222-2222-2222-222222222222', 'friends', 'hey')$$, 'not_found');
+select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Kid","birthYear":2000,"neighborhood":"hill","prompts":[{"id":"weekend","a":"a"},{"id":"lately","a":"b"}]}')$$, 'banned');
+select public.st_delete_me();
+do $$ begin
+  if not exists (select 1 from public.st_banned_emails where email_hash = public.st_email_hash('Kid@Example.com')) then raise exception 'no tombstone'; end if;
+  if (select count(*) from public.st_report_archive where about_id = '44444444-4444-4444-4444-444444444444') < 1 then raise exception 'reports not archived'; end if;
+end $$;
+insert into auth.users values ('77777777-7777-7777-7777-777777777777','kid@example.com');
+select pg_temp.as_user('77777777-7777-7777-7777-777777777777','kid@example.com');
+select public.st_set_photo(0, '77777777-7777-7777-7777-777777777777/0.jpg');
+select pg_temp.expect_error($$select public.st_save_profile('{"firstName":"Kid","birthYear":2000,"neighborhood":"hill","prompts":[{"id":"weekend","a":"a"},{"id":"lately","a":"b"}]}')$$, 'banned');
+
+-- notify claim is atomic and one-shot
+insert into public.st_notify_queue (user_id, kind) values ('22222222-2222-2222-2222-222222222222', 'message');
+do $$ declare n int; begin
+  select count(*) into n from public.st_notify_claim(50); if n < 1 then raise exception 'claim nothing'; end if;
+  select count(*) into n from public.st_notify_claim(50); if n <> 0 then raise exception 'claimed twice'; end if;
+end $$;
 
 -- held message: only the sender sees it; mod can release
 select pg_temp.as_user('22222222-2222-2222-2222-222222222222','sam@example.com');

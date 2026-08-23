@@ -15,8 +15,11 @@
 4. Optional: VAPID keys for web push (`node scripts/vapid.mjs`).
 5. Decide when to list on the hub/arcade (currently unlisted on purpose).
 
+## Done later on 2026-08-23 (follow-up session)
+- Resend SMTP on (magic links for everyone), web push on (VAPID), pg_cron drain every 5 min.
+- Independent Opus code review run and applied (README has the list; SETUP.md has the state).
+
 ## Loose ends (next agent session)
-- Independent code review (Opus or Codex) before cohort 1 — the spec was reviewed, the code was not.
 - Stephen's own first profile = the real end-to-end test (photos, moderation, realtime).
 - Name: "Small Talk" is a placeholder (`APP_NAME` in js/core.js + copy).
 - Watch `mod.html` ratio box weekly once people are in.

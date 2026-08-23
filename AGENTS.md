@@ -29,11 +29,28 @@ Same Supabase project as the rest of the fleet; every object here is `st_*`.
   plan's `url` as humans.
 - **Wingperson, never ghostwriter.** "Stuck?" deals a card from
   `data/questions.json` or shows a self-prompt (`SELF_PROMPTS`). Do not add
-  anything that analyzes or summarizes the other person.
+  anything that analyzes or summarizes the other person. `st_card_deal`
+  stores only the deck id (`^q\d{3}$`) — the text is resolved client-side
+  from `data/questions.json`, never taken from the caller. `st_cards` has no
+  SELECT policy (one row holds both answers); live updates come from
+  `st_chats.last_at`.
+- **A banned account gets nothing, from both sides.** `st_banned(u)` is
+  checked in browse/hi/wave/reply/send/cards/meets; `st_inbox` hides chats
+  with banned partners; a ban writes `st_banned_emails` (sha256 of the email)
+  so it survives "Delete everything", and `st_delete_me` copies reports to
+  `st_report_archive` first.
+- **"Not now" must stay invisible to the sender.** A `passed` hi is projected
+  as `open` in `st_card`/`st_inbox().sent`; a re-hi after expiry to someone
+  who passed stays `passed` and never enqueues a notification. Don't "fix"
+  that asymmetry.
 - **Text-only chat.** No photo/file sending. Photos are profile-only, 1–3,
   re-encoded to JPEG client-side (`shrink()` strips EXIF/GPS), private
-  bucket `st-photos`, signed URLs for signed-in members only. The
-  `st-moderate` function deletes flagged uploads.
+  bucket `st-photos`. The storage read policy is `st_photo_visible(viewer,
+  folder)`: own folder always, otherwise only members with a profile who are
+  not excluded (blocked/hidden/banned) from that person. `st_set_photo`
+  ignores any status from the client — uploads land `pending`; `st-moderate`
+  (immediately) or `st-notify` (every 5 min, pg_cron) marks ok/flagged and
+  deletes flagged objects. A profile needs ≥1 photo and keeps its last one.
 - **Nothing permanent without a human.** Two reports = `suppressed` (hidden
   from browse, chats still work); `minor` = one report. Only `mod.html`
   (`st_is_mod()` by email in `st_mods`) can restore/ban/release/delete.

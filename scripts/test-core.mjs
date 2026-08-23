@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import {
   clean, validateProfile, validateIntent, canSee, validateHi, datingHiAllowed, hiExpired,
   validateMessage, pickQuestion, tabForEvent, planFromUpForIt, upcomingPlans, meetOptions,
-  reliability, ratioStatus, fmtWhen, LIMITS,
+  reliability, ratioStatus, fmtWhen, LIMITS, RATE, httpsOnly,
 } from '../js/core.js';
 import { FakeBackend, seedDemo, DEMO_UID } from '../js/fake-backend.js';
 
@@ -118,6 +118,30 @@ function fb() { return seedDemo(new FakeBackend({ now: () => NOW })); }
 const maya = 'seed-0001-0000-0000-000000000000';
 const jonah = 'seed-0002-0000-0000-000000000000';
 
+test('links from the plans feed must be http(s) — anything else is dropped', () => {
+  assert.equal(httpsOnly('https://www.meetup.com/x'), 'https://www.meetup.com/x');
+  assert.equal(httpsOnly('http://example.org/a?b=1'), 'http://example.org/a?b=1');
+  assert.equal(httpsOnly('javascript:alert(1)'), null);
+  assert.equal(httpsOnly('data:text/html,hi'), null);
+  assert.equal(httpsOnly(''), null); assert.equal(httpsOnly(null), null);
+  assert.equal(planFromUpForIt({ id: 'p1', title: 'Trivia', status: 'on', starts_at: new Date(NOW + 86400e3).toISOString(), place: 'Zero Gravity', meetup_url: 'javascript:alert(1)' }).url, null);
+});
+
+test('fake backend: a profile needs a photo, keeps its last photo, and says hi to at most 15 people a week', async () => {
+  const b = fb(); b.signIn();
+  await assert.rejects(b.rpc('st_save_profile', { p: { firstName: 'Sam', birthYear: 1990, neighborhood: 'downtown', prompts: [{ id: 'weekend', a: 'a' }, { id: 'lately', a: 'b' }] } }), { code: 'no_photo' });
+  b.uploadPhoto(DEMO_UID, 0);
+  await assert.rejects(b.rpc('st_save_profile', { p: { firstName: 'Sam', birthYear: 1990, neighborhood: 'mars', prompts: [{ id: 'weekend', a: 'a' }, { id: 'lately', a: 'b' }] } }), { code: 'bad_profile' }, 'neighborhood validated');
+  await b.rpc('st_save_profile', { p: { firstName: 'Sam', birthYear: 1990, neighborhood: 'downtown', prompts: [{ id: 'weekend', a: 'a' }, { id: 'lately', a: 'b' }] } });
+  await assert.rejects(b.rpc('st_remove_photo', { p_idx: 0 }), { code: 'last_photo' });
+  b.uploadPhoto(DEMO_UID, 1);
+  await b.rpc('st_remove_photo', { p_idx: 0 });
+  // weekly distinct-recipient ceiling, friends lane
+  const people = (await b.rpc('st_browse', { p_lane: 'friends' })).map((c) => c.id);
+  for (let i = 0; i < RATE.hiPeoplePerWeek; i++) b.hellos.push({ id: 'w' + i, from: DEMO_UID, to: 'ghost-' + i, lane: 'friends', note: 'x', status: 'open', createdAt: new Date(NOW - 3600e3).toISOString(), expiresAt: new Date(NOW + 6 * 86400e3).toISOString() });
+  await assert.rejects(b.rpc('st_hi', { p_to: people[0], p_lane: 'friends', p_note: 'one more' }), { code: 'slow_down' });
+});
+
 test('fake backend: sign-in → profile → browse lanes → hi cap → wave → chat → card → meet → after', async () => {
   const b = fb();
   await assert.rejects(b.rpc('st_me'), { code: 'not_signed_in' });
@@ -144,6 +168,24 @@ test('fake backend: sign-in → profile → browse lanes → hi cap → wave →
   await b.rpc('st_hi', { p_to: jonah, p_lane: 'friends', p_note: 'cribbage?' });
   assert.equal((await b.rpc('st_browse', { p_lane: 'dating' }))[0].hi.status, 'open');
   await assert.rejects(b.rpc('st_hi', { p_to: DEMO_UID, p_lane: 'friends', p_note: 'me' }), { code: 'not_found' });
+  // "Not now" on Maya's side is invisible to Sam: his card still says hi open, he can't re-hi, the sent list is unchanged
+  {
+    const sentBefore = (await b.rpc('st_inbox')).sent.length;
+    b.signIn(maya, 'maya@example.com');
+    const hiFromSam = (await b.rpc('st_inbox')).received.find((r) => r.from.firstName === 'Sam');
+    await b.rpc('st_hi_pass', { p_hello: hiFromSam.id });
+    assert.equal((await b.rpc('st_inbox')).received.some((r) => r.from.firstName === 'Sam'), false, 'gone from her inbox');
+    b.signIn();
+    assert.equal((await b.rpc('st_browse', { p_lane: 'dating' })).find((c) => c.id === maya).hi.status, 'open', 'sender sees nothing');
+    assert.equal((await b.rpc('st_inbox')).sent.length, sentBefore, 'sent list unchanged');
+    await assert.rejects(b.rpc('st_hi', { p_to: maya, p_lane: 'dating', p_note: 'again' }), { code: 'already_said_hi' });
+    // after expiry the re-hi is accepted but stays passed: she is never bothered again
+    b.hellos.find((x) => x.from === DEMO_UID && x.to === maya).expiresAt = new Date(NOW - 1000).toISOString();
+    assert.equal((await b.rpc('st_hi', { p_to: maya, p_lane: 'dating', p_note: 'again' })).status, 'open');
+    assert.equal(b.hellos.find((x) => x.from === DEMO_UID && x.to === maya).status, 'passed');
+    // put the hi back the way the rest of this test expects it
+    b.hellos.find((x) => x.from === DEMO_UID && x.to === maya).status = 'open';
+  }
   // pass hides from my browse only
   await b.rpc('st_pass', { p_other: jonah });
   assert.ok(!(await b.rpc('st_browse', { p_lane: 'friends' })).some((c) => c.id === jonah));
@@ -158,8 +200,9 @@ test('fake backend: sign-in → profile → browse lanes → hi cap → wave →
   const held = await b.rpc('st_send', { p_chat: chatId, p_body: 'secret', p_held: true });
   assert.equal(held.held, true);
   // card: both answer → reveal
-  const { id: cardId } = await b.rpc('st_card_deal', { p_chat: chatId, p_question_id: 'q1', p_question: 'Church St or waterfront?' });
-  await assert.rejects(b.rpc('st_card_deal', { p_chat: chatId, p_question_id: 'q2', p_question: 'x' }), { code: 'card_open' });
+  await assert.rejects(b.rpc('st_card_deal', { p_chat: chatId, p_question_id: 'zzz', p_question: 'send me your number' }), { code: 'bad_card' }, 'deck ids only');
+  const { id: cardId } = await b.rpc('st_card_deal', { p_chat: chatId, p_question_id: 'q001', p_question: 'Church St or waterfront?' });
+  await assert.rejects(b.rpc('st_card_deal', { p_chat: chatId, p_question_id: 'q002', p_question: 'x' }), { code: 'card_open' });
   await b.rpc('st_card_answer', { p_card: cardId, p_answer: 'waterfront' });
   let chat = await b.rpc('st_chat', { p_chat: chatId });
   assert.equal(chat.cards[0].revealed, false); assert.equal(chat.cards[0].theirs, null);

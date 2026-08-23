@@ -74,14 +74,23 @@ function toast(msg, ms = 2600) {
   clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, ms);
 }
 function fail(e) { console.warn(e); toast(explain(e)); }
+// a non-button element that acts like one: reachable by keyboard, announced as a button
+function pressable(el, fn, label) {
+  if (!el) return;
+  el.setAttribute('role', 'button'); el.tabIndex = 0; if (label) el.setAttribute('aria-label', label);
+  el.addEventListener('click', fn);
+  el.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fn(e); } });
+}
 
 function openSheet(node) { const s = $('#sheet'); s.innerHTML = ''; s.append(node); $('#sheet-host').hidden = false; const f = s.querySelector('textarea, input, button.primary, button'); if (f) setTimeout(() => f.focus(), 30); }
 function closeSheet() { $('#sheet-host').hidden = true; $('#sheet').innerHTML = ''; }
 
+// signed URLs live an hour; re-sign anything older than 50 minutes so a long-open tab keeps its pictures
 async function photoUrls(paths) {
-  const need = paths.filter((p) => !state.urls[p]);
-  if (need.length) Object.assign(state.urls, await api.photoUrls(need));
-  return paths.map((p) => state.urls[p]).filter(Boolean);
+  const t = now();
+  const need = paths.filter((p) => !state.urls[p] || t - state.urls[p].at > 50 * 60 * 1000);
+  if (need.length) { const got = await api.photoUrls(need); for (const [k, u] of Object.entries(got)) state.urls[k] = { u, at: t }; }
+  return paths.map((p) => state.urls[p]?.u).filter(Boolean);
 }
 
 // ------------------------------------------------------------- landing (signed out)
@@ -119,7 +128,7 @@ async function renderLanding() {
   try {
     const s = await api.rpc('st_public_stats');
     const box = $('#land-people');
-    box.innerHTML = `<h3>${s.members} ${s.members === 1 ? 'person' : 'people'} here so far</h3><div class="frag" style="margin-top:8px">${s.fragments.map((f) => `<span>Someone in ${esc(hoodLabel(f.neighborhood))}${f.tabs?.length ? ' · ' + f.tabs.map(tabLabel).join(', ').toLowerCase() : ''}</span>`).join('')}</div><p class="small muted">Names and photos are for signed-in members only.</p>`;
+    box.innerHTML = `<h3>${s.members} ${s.members === 1 ? 'person' : 'people'} here so far</h3><div class="frag" style="margin-top:8px">${s.fragments.map((f) => `<span>Someone in ${esc(hoodLabel(f.neighborhood))}${f.tabs?.length ? ' · ' + f.tabs.map(tabLabel).join(', ').toLowerCase() : ''}</span>`).join('')}</div><p class="small muted">Names and photos are for members with a profile only.</p>`;
   } catch { /* not switched on yet: say nothing */ }
   try {
     const plans = upcomingPlans(await fetchPlans(), now(), 10).slice(0, 6);
@@ -174,7 +183,7 @@ function renderOnboarding() {
   if (o.step === 2) {
     const d = o.draft;
     const v = h(`<div class="stack">${head(2, 'You, briefly')}
-      <div class="photos" id="photos"></div><p class="small muted">One photo at least, three at most. We strip location data from photos. Photos are visible to signed-in members only.</p>
+      <div class="photos" id="photos"></div><p class="small muted">One photo at least, three at most. We strip location data from photos. Photos are visible only to members with a profile of their own, never to anyone you've blocked or hidden. New photos get an automatic check.</p>
       <label class="f">First name<input type="text" id="fn" maxlength="24" autocomplete="given-name" value="${esc(d.firstName ?? '')}"></label>
       <label class="f">Birth year <span class="muted">(we never store a full date)</span><input type="number" id="by" inputmode="numeric" min="1900" max="2010" placeholder="1994" value="${esc(d.birthYear ?? '')}"></label>
       <label class="f">Neighborhood<select id="hood"><option value="">Pick one</option>${NEIGHBORHOODS.map((n) => `<option value="${n.id}" ${d.neighborhood === n.id ? 'selected' : ''}>${esc(n.label)}</option>`).join('')}</select></label>
@@ -245,7 +254,8 @@ function renderPhotoSlots() {
   const photos = state.onb ? state.onb.photos : Object.fromEntries((state.me?.profile?.photosAll || []).map((p) => [p.idx, p.path]));
   for (let idx = 0; idx < LIMITS.photosMax; idx++) {
     const path = photos[idx];
-    const slot = h(`<div class="slot" data-idx="${idx}">${path ? `<img alt="Photo ${idx + 1}">` : '<span>+</span>'}<input type="file" accept="image/*" aria-label="Photo ${idx + 1}">${path ? '<button class="x" aria-label="Remove photo">×</button>' : ''}</div>`);
+    const canRemove = path && (state.onb || Object.keys(photos).length > 1);   // a live profile keeps at least one photo
+    const slot = h(`<div class="slot" data-idx="${idx}">${path ? `<img alt="Photo ${idx + 1}">` : '<span>+</span>'}<input type="file" accept="image/*" aria-label="Photo ${idx + 1}">${canRemove ? '<button class="x" aria-label="Remove photo">×</button>' : ''}</div>`);
     if (path) photoUrls([path]).then(([u]) => { const img = $('img', slot); if (img && u) img.src = u; });
     $('input', slot).addEventListener('change', async (e) => {
       const f = e.target.files[0]; if (!f) return;
@@ -346,7 +356,7 @@ function personCard(c, plans) {
   }
   $('[data-act="pass"]', el)?.addEventListener('click', async () => { el.remove(); try { await api.rpc('st_pass', { p_other: c.id }); } catch (e) { fail(e); } if (!$('#deck .pcard')) renderDeckEmpty($('#deck')); });
   $('[data-act="hi"]', el)?.addEventListener('click', () => hiSheet(c, el));
-  $('.body .name', el).addEventListener('click', () => profileSheet(c, plans));
+  pressable($('.body .name', el), () => profileSheet(c, plans), `Open ${c.firstName}'s profile`);
   return el;
 }
 
@@ -378,7 +388,7 @@ function hiSheet(c, cardEl) {
     const r = validateHi(ta.value); if (!r.ok) { toast(r.error); return; }
     btn.disabled = true;
     try {
-      await api.rpc('st_hi', { p_to: c.id, p_lane: state.lane, p_note: r.note });
+      await api.hi(c.id, state.lane, r.note);
       kickNotify(); closeSheet(); toast('Sent. You’ll hear back in Inbox if they answer.');
       $('.actions', cardEl)?.replaceWith(h('<div class="hi-sent">You said hi.</div>'));
       if (state.lane === 'dating' && state.me) { state.me.datingHiRemaining = Math.max(0, (state.me.datingHiRemaining ?? 5) - 1); $('#lane-note').textContent = `${state.me.datingHiRemaining} hi's left this week`; }
@@ -486,8 +496,8 @@ async function renderInbox() {
     for (const r of received) {
       const row = h(`<div class="hi-row"><img class="avatar" alt=""><div><div class="n">${esc(r.from.firstName)} <span class="muted small">${r.from.age} · ${esc(hoodLabel(r.from.neighborhood))}</span></div><div class="note">“${esc(r.note)}”</div></div><div class="acts"><button class="btn sm" data-wave title="Wave back">👋</button><button class="btn sm primary" data-reply>Reply</button></div></div>`);
       if (r.from.photos?.[0]) photoUrls([r.from.photos[0]]).then(([u]) => { if (u) $('img', row).src = u; });
-      $('.n', row).addEventListener('click', () => profileSheet(r.from, state.plans));
-      $('.note', row).addEventListener('click', () => hiReplySheet(r));
+      pressable($('.n', row), () => profileSheet(r.from, state.plans), `Open ${r.from.firstName}'s profile`);
+      pressable($('.note', row), () => hiReplySheet(r), 'Read and reply');
       $('[data-wave]', row).addEventListener('click', async () => { try { const { chatId } = await api.rpc('st_wave', { p_hello: r.id }); kickNotify(); badgeMinus(); openChat(chatId); } catch (e) { fail(e); } });
       $('[data-reply]', row).addEventListener('click', () => hiReplySheet(r));
       $('#recv', v).append(row);
@@ -515,7 +525,7 @@ function hiReplySheet(r) {
   const ta = $('#rp', v); ta.addEventListener('input', () => { $('#send', v).disabled = !ta.value.trim(); });
   $('#pass', v).addEventListener('click', async () => { try { await api.rpc('st_hi_pass', { p_hello: r.id }); badgeMinus(); closeSheet(); renderInbox(); } catch (e) { fail(e); } });
   $('#wave', v).addEventListener('click', async () => { try { const { chatId } = await api.rpc('st_wave', { p_hello: r.id }); kickNotify(); badgeMinus(); closeSheet(); openChat(chatId); } catch (e) { fail(e); } });
-  $('#send', v).addEventListener('click', async () => { const m = validateMessage(ta.value); if (!m.ok) { toast(m.error); return; } try { const { chatId } = await api.rpc('st_reply', { p_hello: r.id, p_body: m.body }); kickNotify(); badgeMinus(); closeSheet(); openChat(chatId); } catch (e) { fail(e); } });
+  $('#send', v).addEventListener('click', async () => { const m = validateMessage(ta.value); if (!m.ok) { toast(m.error); return; } try { const { chatId, held } = await api.reply(r.id, m.body); kickNotify(); badgeMinus(); closeSheet(); if (held) toast('Held for a quick look before it’s delivered.', 4000); openChat(chatId); } catch (e) { fail(e); } });
 }
 
 // ------------------------------------------------------------- chat
@@ -593,7 +603,8 @@ function paintMessages(c) {
 
 const cardDrafts = new Map(); // card id → in-progress answer, survives live repaints
 function cardNode(k) {
-  const el = h(`<div class="card-q"><div class="k">Card · both answer, then reveal</div><div class="q">${esc(k.question)}</div>
+  const qText = k.question || (state.questions || []).find((q) => q.id === k.questionId)?.q || 'A card from the deck';
+  const el = h(`<div class="card-q"><div class="k">Card · both answer, then reveal</div><div class="q">${esc(qText)}</div>
     ${k.mine ? `<div class="ans"><b>You</b>${esc(k.mine)}</div>` : `<textarea class="f" rows="2" maxlength="280" placeholder="Your answer — they see it only after they answer too">${esc(cardDrafts.get(k.id) || '')}</textarea><div class="row" style="margin-top:6px"><button class="btn sm primary" data-ans>Lock it in</button></div>`}
     ${k.revealed ? `<div class="ans"><b>Them</b>${esc(k.theirs)}</div>` : k.mine ? '<div class="small muted" style="margin-top:6px">Waiting for their answer…</div>' : ''}
   </div>`);
