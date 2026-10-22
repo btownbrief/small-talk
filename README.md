@@ -107,3 +107,5 @@ The anon key is public. Supabase Auth (Google / magic link) + RLS +
 SECURITY DEFINER RPCs + rate limits + reports + the back room stop casual
 mischief, not a determined adversary. Nothing here is presented as
 integrity-protected, and the About page says so in plain words.
+
+All rights reserved: this code is published for viewing only and is not open source (see [LICENSE](LICENSE)).
